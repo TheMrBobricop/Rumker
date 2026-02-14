@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  email     String?  @unique
+  password  String // Хэш пароля
+  firstName String
+  lastName  String?
+  bio       String?
+  avatar    String?
+  phone     String?  @unique
+  lastSeen  DateTime @default(now())
+  isOnline  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  telegramId       String?   @unique // ID from Telegram
+  telegramSession  String?   // Encrypted session string
+  isTelegramLinked Boolean   @default(false)
+
+  messages       Message[]
+  chats          ChatParticipant[]
+  createdChats   Chat[]            @relation("CreatedChats")
+  messageReads   MessageRead[]
+  contactOf      Contact[]         @relation("ContactUser")
+  contacts       Contact[]         @relation("UserContacts")
+  sessions       Session[]
+  
+  // Friend requests
+  sentFriendRequests     FriendRequest[] @relation("SentFriendRequests")
+  receivedFriendRequests FriendRequest[] @relation("ReceivedFriendRequests")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique // Refresh token
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Chat {
+  id        String   @id @default(uuid())
+  type      String   // private, group, channel
+  title     String?
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  creatorId String?
+
+  creator      User?             @relation("CreatedChats", fields: [creatorId], references: [id])
+  messages     Message[]
+  participants ChatParticipant[]
+}
+
+model ChatParticipant {
+  id       String   @id @default(uuid())
+  userId   String
+  chatId   String
+  role     String   @default("member") // owner, admin, member
+  joinedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chatId])
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  chatId         String
+  senderId       String
+  type           String   // text, image, video, voice, sticker, file
+  content        String
+  mediaUrl       String?
+  mediaMetadata  String?  // JSON string
+  replyToId      String?
+  isEdited       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  chat    Chat          @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender  User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  replyTo Message?      @relation("ReplyTo", fields: [replyToId], references: [id])
+  replies Message[]     @relation("ReplyTo")
+  reads   MessageRead[]
+}
+
+model MessageRead {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  readAt    DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+}
+
+model Contact {
+  id        String   @id @default(uuid())
+  userId    String
+  contactId String
+  createdAt DateTime @default(now())
+
+  user    User @relation("UserContacts", fields: [userId], references: [id], onDelete: Cascade)
+  contact User @relation("ContactUser", fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contactId])
+}
+
+model FriendRequest {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     String   @default("pending") // pending, accepted, rejected, blocked
+  message    String?  // Optional message with friend request
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  sender   User @relation("SentFriendRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedFriendRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@index([receiverId, status])
+}

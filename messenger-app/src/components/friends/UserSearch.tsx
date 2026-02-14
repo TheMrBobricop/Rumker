@@ -1,0 +1,169 @@
+import { useState, useCallback, useEffect } from 'react';
+import { useDebounce } from '@/lib/hooks/useDebounce';
+import { Input } from '@/components/ui/input';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Search, Loader2, UserPlus } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { sendFriendRequest } from '@/lib/api/friends';
+import { useAuthStore } from '@/stores/authStore';
+
+interface User {
+    id: string;
+    username: string;
+    firstName: string;
+    lastName?: string;
+    avatar?: string;
+    bio?: string;
+    isOnline?: boolean;
+}
+
+interface UserSearchProps {
+    onAddFriend?: (user: User) => void;
+    className?: string;
+}
+
+export function UserSearch({ onAddFriend, className }: UserSearchProps) {
+    const { token } = useAuthStore();
+    const [query, setQuery] = useState('');
+    const [users, setUsers] = useState<User[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [showResults, setShowResults] = useState(false);
+    const [sendingRequest, setSendingRequest] = useState<string | null>(null);
+    
+    const debouncedQuery = useDebounce(query, 300);
+
+    const searchUsers = useCallback(async (searchQuery: string) => {
+        if (!searchQuery || searchQuery.length < 2) {
+            setUsers([]);
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            if (!token) {
+                throw new Error('No authentication token');
+            }
+            
+            const res = await fetch(`/api/users/search?query=${encodeURIComponent(searchQuery)}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (!res.ok) throw new Error('Search failed');
+            
+            const data = await res.json();
+            setUsers(data.users || []);
+        } catch (error) {
+            console.error('Search error:', error);
+            toast.error('Failed to search users');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [token]);
+
+    useEffect(() => {
+        searchUsers(debouncedQuery);
+    }, [debouncedQuery, searchUsers]);
+
+    const handleAddFriend = async (user: User, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setSendingRequest(user.id);
+        try {
+            await sendFriendRequest(user.username);
+            toast.success(`Friend request sent to @${user.username}`);
+            onAddFriend?.(user);
+            setQuery('');
+            setUsers([]);
+            setShowResults(false);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to send request';
+            toast.error(message);
+        } finally {
+            setSendingRequest(null);
+        }
+    };
+
+    const getInitials = (user: User) => {
+        const name = user.firstName || user.username;
+        return name.slice(0, 2).toUpperCase();
+    };
+
+    return (
+        <div className={cn('relative', className)}>
+            <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                    value={query}
+                    onChange={(e) => {
+                        setQuery(e.target.value);
+                        setShowResults(true);
+                    }}
+                    onFocus={() => setShowResults(true)}
+                    placeholder="Search users by ID..."
+                    className="pl-9 h-10"
+                />
+            </div>
+
+            {/* Results dropdown */}
+            {showResults && (query.length >= 2 || users.length > 0) && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg z-50 max-h-[300px] overflow-y-auto">
+                    {isLoading ? (
+                        <div className="flex items-center justify-center py-4">
+                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : users.length === 0 ? (
+                        <div className="px-4 py-3 text-sm text-muted-foreground">
+                            {query.length >= 2 ? 'No users found' : 'Type at least 2 characters'}
+                        </div>
+                    ) : (
+                        <div className="py-1">
+                            {users.map((user) => (
+                                <button
+                                    key={user.id}
+                                    onClick={() => {
+                                        setQuery('');
+                                        setUsers([]);
+                                        setShowResults(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-muted transition-colors text-left"
+                                >
+                                    <Avatar className="h-10 w-10">
+                                        <AvatarImage src={user.avatar} />
+                                        <AvatarFallback className="bg-tg-primary/10 text-tg-primary text-sm">
+                                            {getInitials(user)}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-sm truncate">
+                                            {user.firstName} {user.lastName}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground truncate">
+                                            ID: @{user.username}
+                                        </p>
+                                    </div>
+                                    {user.isOnline && (
+                                        <span className="h-2 w-2 rounded-full bg-tg-online" />
+                                    )}
+                                    <button
+                                        onClick={(e) => handleAddFriend(user, e)}
+                                        disabled={sendingRequest === user.id}
+                                        className="p-1 hover:bg-tg-primary/10 rounded-full transition-colors"
+                                        title="Add friend"
+                                    >
+                                        {sendingRequest === user.id ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <UserPlus className="h-4 w-4 text-tg-primary" />
+                                        )}
+                                    </button>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
