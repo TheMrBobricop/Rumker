@@ -1,8 +1,8 @@
 
 import { Router } from 'express';
 import authRouter from './auth.js';
-import chatsRouter from './chats.js';
-import usersRouter from './users.js';
+import chatsRouter from './chats_supabase.js';
+import usersRouter from './users_supabase.js';
 import friendsRouter from './friends.js';
 
 const router = Router();

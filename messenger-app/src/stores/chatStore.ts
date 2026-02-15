@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Chat, Message } from '@/types';
 import { getChats, getMessages, sendMessage as apiSendMessage } from '@/lib/api/chats';
+import { useAuthStore } from './authStore';
 
 interface ChatStore {
     // State
@@ -47,7 +48,8 @@ export const useChatStore = create<ChatStore>((set) => ({
 
     loadChats: async () => {
         // Check if user is authenticated
-        const token = localStorage.getItem('token');
+        const authStore = useAuthStore.getState();
+        const token = authStore.token;
         if (!token) {
             console.log('No token found, skipping chat load');
             return;

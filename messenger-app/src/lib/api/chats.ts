@@ -4,7 +4,7 @@ import type { Chat, Message } from '@/types';
 
 export interface CreateChatData {
     type: 'private' | 'group' | 'channel';
-    title?: string;
+    name?: string;
     participantIds?: string[];
 }
 

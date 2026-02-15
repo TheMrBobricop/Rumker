@@ -2,6 +2,8 @@
 // API Client
 // ========================================
 
+import { useAuthStore } from '@/stores/authStore';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 interface RequestOptions {
@@ -33,8 +35,10 @@ class ApiClient {
             ...customHeaders,
         });
 
-        if (this.token) {
-            headers.set('Authorization', `Bearer ${this.token}`);
+        // Автоматически получаем токен из authStore
+        const token = useAuthStore.getState().token;
+        if (token) {
+            headers.set('Authorization', `Bearer ${token}`);
         }
 
         return headers;
@@ -105,8 +109,10 @@ class ApiClient {
         }
 
         const headers = new Headers();
-        if (this.token) {
-            headers.set('Authorization', `Bearer ${this.token}`);
+        // Автоматически получаем токен из authStore
+        const token = useAuthStore.getState().token;
+        if (token) {
+            headers.set('Authorization', `Bearer ${token}`);
         }
         // Do NOT set Content-Type — the browser will set it with the boundary
 

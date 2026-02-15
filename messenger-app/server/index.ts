@@ -6,6 +6,10 @@ import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+// Загружаем переменные окружения
+dotenv.config();
 
 // Загрузка конфигурации безопасности
 const CLIENT_URL = process.env.VITE_CLIENT_URL || 'http://localhost:5173';
@@ -57,15 +61,15 @@ app.use(
     })
 );
 
-// 3. Rate Limiting - защита от брутфорс атак
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 минут
-    max: 100, // Лимит 100 запросов с одного IP
-    message: 'Too many requests from this IP, please try again after 15 minutes',
-    standardHeaders: true, // Возвращает `RateLimit-*` заголовки
-    legacyHeaders: false, // Отключает `X-RateLimit-*` заголовки
-});
-app.use('/api', limiter); // Применяем лимит ко всем API запросам
+// 3. Rate Limiting - защита от брутфорс атак (временно отключено для теста)
+// const limiter = rateLimit({
+//     windowMs: 15 * 60 * 1000, // 15 минут
+//     max: 100, // Лимит 100 запросов с одного IP
+//     message: 'Too many requests from this IP, please try again after 15 minutes',
+//     standardHeaders: true, // Возвращает `RateLimit-*` заголовки
+//     legacyHeaders: false, // Отключает `X-RateLimit-*` заголовки
+// });
+// app.use('/api', limiter); // Применяем лимит ко всем API запросам
 
 // --- Middleware ---
 app.use(express.json()); // Парсинг JSON

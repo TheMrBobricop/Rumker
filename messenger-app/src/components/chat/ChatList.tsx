@@ -6,6 +6,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Check, CheckCheck } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ChatListHeader } from './ChatListHeader';
+import { FloatingCreateButton } from './FloatingCreateButton';
 
 interface ChatListProps {
     className?: string;
@@ -41,6 +43,9 @@ export function ChatList({ className }: ChatListProps) {
     return (
         <ScrollArea className={cn('h-full w-full', className)}>
             <div className="flex flex-col">
+                {/* Header with create chat buttons */}
+                <ChatListHeader onCreateChat={() => {}} />
+                
                 {isLoading && (
                     <div className="p-3 space-y-3">
                         {[...Array(5)].map((_, i) => (
@@ -169,6 +174,12 @@ export function ChatList({ className }: ChatListProps) {
                     );
                 })}
             </div>
+            
+            {/* Floating Create Button */}
+            <FloatingCreateButton onCreateChat={(chat) => {
+                console.log('Chat created:', chat);
+                // TODO: Обновить список чатов и активировать новый
+            }} />
         </ScrollArea>
     );
 }
