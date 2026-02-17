@@ -606,41 +606,70 @@ router.post('/:chatId/messages', authenticateToken, async (req: AuthRequest, res
         }
 
         // Создаем сообщение
+        const now = new Date().toISOString();
         const insertData: Record<string, unknown> = {
             chat_id: chatId,
             sender_id: userId,
             content: content || '',
             type,
+            created_at: now,
+            updated_at: now,
         };
         if (fileUrl) insertData.file_url = fileUrl;
         if (replyToId) insertData.reply_to_id = replyToId;
 
-        const { data: message, error: messageError } = await supabase
+        const messageSelect = `
+            id,
+            chat_id,
+            content,
+            type,
+            file_url,
+            reply_to_id,
+            created_at,
+            updated_at,
+            sender_id,
+            users(
+                id,
+                username,
+                first_name,
+                last_name,
+                avatar
+            )
+        `;
+
+        let { data: message, error: messageError } = await supabase
             .from('messages')
             .insert(insertData)
-            .select(`
-                id,
-                chat_id,
-                content,
-                type,
-                file_url,
-                reply_to_id,
-                created_at,
-                updated_at,
-                sender_id,
-                users(
-                    id,
-                    username,
-                    first_name,
-                    last_name,
-                    avatar
-                )
-            `)
+            .select(messageSelect)
             .single();
+
+        // Retry with 'text' type if DB constraint rejects the type (voice/sticker/file/audio)
+        if (messageError?.message?.includes('messages_type_check')) {
+            console.warn(`[DB] Type '${type}' rejected by constraint. Retrying with 'text' fallback.`);
+            console.warn('[DB] Fix: Run this SQL in Supabase SQL Editor to allow all types:');
+            console.warn("ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;");
+            console.warn("ALTER TABLE messages ADD CONSTRAINT messages_type_check CHECK (type IN ('text','image','video','voice','sticker','file','audio'));");
+
+            const originalType = type;
+            insertData.type = 'text';
+
+            const retry = await supabase
+                .from('messages')
+                .insert(insertData)
+                .select(messageSelect)
+                .single();
+            message = retry.data;
+            messageError = retry.error;
+
+            // Override the type in the response so the client renders correctly
+            if (message) {
+                (message as any).type = originalType;
+            }
+        }
 
         if (messageError || !message) {
             console.error('Send message error:', messageError);
-            return res.status(500).json({ error: 'Failed to send message' });
+            return res.status(500).json({ error: 'Failed to send message', message: messageError?.message, details: messageError?.details });
         }
 
         // Обновляем время последнего сообщения в чате
@@ -742,7 +771,7 @@ router.patch('/:chatId/messages/:messageId', authenticateToken, async (req: Auth
 
         if (updateError || !updated) {
             console.error('Edit message error:', updateError);
-            return res.status(500).json({ error: 'Failed to edit message' });
+            return res.status(500).json({ error: 'Failed to edit message', message: updateError?.message });
         }
 
         const formattedEdited = {

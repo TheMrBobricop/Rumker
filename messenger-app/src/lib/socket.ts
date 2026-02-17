@@ -5,11 +5,21 @@ class SocketService {
     private socket: Socket | null = null;
 
     connect(token: string): void {
-        if (this.socket?.connected) return;
+        // Reuse existing socket if already connected or connecting
+        if (this.socket) {
+            if (this.socket.connected) return;
+            // Socket exists but disconnected — reconnect
+            this.socket.auth = { token };
+            this.socket.connect();
+            return;
+        }
 
         this.socket = io(window.location.origin, {
             auth: { token },
-            transports: ['websocket', 'polling'],
+            transports: ['polling', 'websocket'],
+            upgrade: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
         });
 
         this.socket.on('connect', () => {

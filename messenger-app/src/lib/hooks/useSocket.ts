@@ -33,12 +33,14 @@ export function useSocket() {
 
         // Wire socket events to store actions
         socketService.onNewMessage((message) => {
+            // Skip own messages — they are already added by sendMessage in chatStore
+            if (message.senderId === currentUserId) {
+                updateChatLastMessage(message.chatId, message);
+                return;
+            }
             addMessage(message);
             updateChatLastMessage(message.chatId, message);
-            // Increment unread if the message is from another user
-            if (message.senderId !== currentUserId) {
-                incrementUnread(message.chatId);
-            }
+            incrementUnread(message.chatId);
         });
 
         socketService.onMessageEdit((message) => {

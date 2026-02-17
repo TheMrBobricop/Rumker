@@ -1,7 +1,7 @@
 
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Reply, Copy, Pencil, Trash2 } from 'lucide-react';
+import { Reply, Copy, Pencil, Trash2, CheckSquare, Forward } from 'lucide-react';
 import type { Message } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -16,6 +16,8 @@ interface MessageContextMenuProps {
     onEdit: (message: Message) => void;
     onDelete: (message: Message) => void;
     onReaction: (message: Message, emoji: string) => void;
+    onSelect?: (message: Message) => void;
+    onForward?: (message: Message) => void;
 }
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
@@ -31,6 +33,8 @@ export function MessageContextMenu({
     onEdit,
     onDelete,
     onReaction,
+    onSelect,
+    onForward,
 }: MessageContextMenuProps) {
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -97,7 +101,7 @@ export function MessageContextMenu({
     const menuContent = (
         <div
             ref={menuRef}
-            className="fixed z-[100] min-w-[200px] max-w-[calc(100vw-16px)] rounded-xl bg-white dark:bg-zinc-800 shadow-xl border border-gray-100 dark:border-zinc-700 py-1 animate-in fade-in zoom-in-95 duration-150"
+            className="fixed z-[100] min-w-[200px] max-w-[calc(100vw-16px)] rounded-xl bg-white dark:bg-zinc-800 shadow-xl border border-gray-100 dark:border-zinc-700 py-1 animate-in fade-in zoom-in-95 duration-100"
             style={{ left: x, top: y }}
         >
             {/* Emoji Reactions Row */}
@@ -125,6 +129,22 @@ export function MessageContextMenu({
                     icon={<Copy className="h-4 w-4" />}
                     label="Копировать"
                     onClick={() => { onCopy(message); onClose(); }}
+                />
+            )}
+
+            {onForward && (
+                <MenuItem
+                    icon={<Forward className="h-4 w-4" />}
+                    label="Переслать"
+                    onClick={() => { onForward(message); onClose(); }}
+                />
+            )}
+
+            {onSelect && (
+                <MenuItem
+                    icon={<CheckSquare className="h-4 w-4" />}
+                    label="Выделить"
+                    onClick={() => { onSelect(message); onClose(); }}
                 />
             )}
 

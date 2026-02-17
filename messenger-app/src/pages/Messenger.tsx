@@ -16,7 +16,7 @@ import { mediaCache } from '@/lib/cache/mediaCacheManager';
 import { useSocket } from '@/lib/hooks/useSocket';
 
 export function MessengerPage() {
-    const { appearance, cache, setTheme } = useSettingsStore();
+    const { appearance, cache } = useSettingsStore();
     const { activeChat, setActiveChat, loadChats } = useChatStore();
 
     const [isMobile, setIsMobile] = useState(false);
@@ -66,7 +66,7 @@ export function MessengerPage() {
         if (appearance.themePreset) {
             applyThemePreset(appearance.themePreset);
         } else {
-            setTheme(appearance.theme);
+            // No preset — apply dark/light from theme setting
             const isDark = appearance.theme === 'dark' ||
                 (appearance.theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
             document.documentElement.classList.toggle('dark', isDark);
@@ -94,20 +94,20 @@ export function MessengerPage() {
             '--tg-message-in',
             appearance.messageBubbles.incomingColor
         );
-    }, [appearance.themePreset, appearance.theme, appearance.messageBubbles.borderRadius, appearance.messageBubbles.fontSize, appearance.chatBackground.value, appearance.messageBubbles.outgoingColor, appearance.messageBubbles.incomingColor, setTheme]);
+    }, [appearance.themePreset, appearance.theme, appearance.messageBubbles.borderRadius, appearance.messageBubbles.fontSize, appearance.chatBackground.value, appearance.messageBubbles.outgoingColor, appearance.messageBubbles.incomingColor]);
 
     return (
-        <div className="flex h-dvh w-screen overflow-hidden bg-background transition-colors duration-200">
+        <div className="flex h-dvh w-screen overflow-hidden bg-background transition-colors duration-150">
             {/* Sidebar */}
             <aside
                 className={cn(
-                    'flex-col border-r border-border bg-card transition-colors duration-200',
+                    'flex-col border-r border-border bg-card transition-colors duration-150',
                     'w-full md:w-[340px] lg:w-[380px] md:min-w-[300px] md:max-w-[420px]',
                     isMobile && activeChat ? 'hidden' : 'flex'
                 )}
             >
                 {/* Header */}
-                <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-2 bg-card transition-colors duration-200">
+                <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-2 bg-card transition-colors duration-150">
                     <MainMenu />
 
                     {showSearch ? (
@@ -186,7 +186,7 @@ export function MessengerPage() {
             {/* Main Chat Area */}
             <main
                 className={cn(
-                    'flex-1 flex-col bg-tg-bg dark:bg-tg-bg-dark min-w-0 transition-colors duration-200',
+                    'flex-1 flex-col bg-tg-bg dark:bg-tg-bg-dark min-w-0 transition-colors duration-150',
                     isMobile && !activeChat ? 'hidden' : 'flex'
                 )}
             >

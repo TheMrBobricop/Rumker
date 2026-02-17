@@ -189,7 +189,7 @@
    Dynamic settings variables
    ======================================== */
 :root {
-  --message-border-radius: 12px;
+  --message-border-radius: 18px;
   --message-font-size: 14px;
   --chat-background: #f5f6f8;
 }
@@ -250,6 +250,7 @@
     scrollbar-color: var(--tg-text-secondary) transparent;
   }
 
+  /* Telegram-style curved tails using SVG paths */
   .message-bubble-tail-out {
     position: relative;
   }
@@ -259,10 +260,10 @@
     position: absolute;
     bottom: 0;
     right: -8px;
-    width: 10px;
-    height: 16px;
+    width: 9px;
+    height: 20px;
     background: var(--bubble-color, var(--tg-message-out));
-    clip-path: path('M 0 0 C 0 6, 3 12, 10 16 L 0 16 Z');
+    clip-path: path('M 0 0 C 0 7 4 13 9 20 L 0 20 Z');
   }
 
   .message-bubble-tail-in {
@@ -274,15 +275,15 @@
     position: absolute;
     bottom: 0;
     left: -8px;
-    width: 10px;
-    height: 16px;
+    width: 9px;
+    height: 20px;
     background: var(--bubble-color, var(--tg-message-in));
-    clip-path: path('M 10 0 C 10 6, 7 12, 0 16 L 10 16 Z');
+    clip-path: path('M 9 0 C 9 7 5 13 0 20 L 9 20 Z');
   }
 
   /* Transition utilities */
   .transition-smooth {
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   /* Animation for typing indicator */
@@ -348,15 +349,15 @@
   }
 
   .animate-slide-in {
-    animation: slide-in 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
+    animation: slide-in 0.18s cubic-bezier(0.4, 0, 0.2, 1) both;
   }
 
   .animate-slide-out-left {
-    animation: slide-out-left 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
+    animation: slide-out-left 0.15s cubic-bezier(0.4, 0, 0.2, 1) both;
   }
 
   .animate-slide-out-right {
-    animation: slide-out-right 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
+    animation: slide-out-right 0.15s cubic-bezier(0.4, 0, 0.2, 1) both;
   }
 
   /* Page / panel transition animations */
@@ -383,26 +384,88 @@
   }
 
   .animate-fade-slide-in {
-    animation: fade-slide-in 0.2s cubic-bezier(0.4, 0, 0.2, 1) both;
+    animation: fade-slide-in 0.15s cubic-bezier(0.4, 0, 0.2, 1) both;
   }
 
   .animate-fade-scale-in {
-    animation: fade-scale-in 0.15s cubic-bezier(0.4, 0, 0.2, 1) both;
+    animation: fade-scale-in 0.12s cubic-bezier(0.4, 0, 0.2, 1) both;
   }
 
   /* Message appear animation */
   @keyframes message-in {
     from {
       opacity: 0;
-      transform: translateY(10px) scale(0.97);
+      transform: translateY(8px);
     }
     to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-message-in {
+    animation: message-in 0.1s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  }
+
+  /* Telegram-style send animation — slide up from bottom right */
+  @keyframes msg-send {
+    0% {
+      opacity: 0;
+      transform: translateY(20px) scale(0.95);
+    }
+    60% {
+      opacity: 1;
+      transform: translateY(-2px) scale(1.01);
+    }
+    100% {
       opacity: 1;
       transform: translateY(0) scale(1);
     }
   }
 
-  .animate-message-in {
-    animation: message-in 0.2s cubic-bezier(0.4, 0, 0.2, 1) both;
+  .animate-msg-send {
+    animation: msg-send 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  /* Scroll-to-bottom button appear */
+  @keyframes scroll-btn-in {
+    from {
+      opacity: 0;
+      transform: scale(0.8) translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  .animate-scroll-btn {
+    animation: scroll-btn-in 0.2s ease-out both;
+  }
+
+  /* GPU acceleration for frequently animated elements */
+  .will-change-transform {
+    will-change: transform;
+  }
+
+  /* Message selection highlight */
+  .message-selected {
+    background-color: var(--tg-primary);
+    opacity: 0.12;
+  }
+
+  @keyframes selection-pop {
+    from {
+      transform: scale(0.95);
+      opacity: 0.8;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  .animate-selection-pop {
+    animation: selection-pop 0.12s ease-out both;
   }
 }

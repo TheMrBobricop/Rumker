@@ -146,8 +146,41 @@ export const useSettingsStore = create<SettingsStore>()(
                         }
                     }
 
+                    // Clear preset CSS vars so manual theme takes effect
+                    const root2 = document.documentElement;
+                    root2.style.removeProperty('--tg-bg');
+                    root2.style.removeProperty('--tg-bg-dark');
+                    root2.style.removeProperty('--tg-header');
+                    root2.style.removeProperty('--tg-primary');
+                    root2.style.removeProperty('--tg-message-out');
+                    root2.style.removeProperty('--tg-message-in');
+                    root2.style.removeProperty('--tg-input-bg');
+                    root2.style.removeProperty('--tg-text');
+                    root2.style.removeProperty('--tg-text-secondary');
+                    root2.style.removeProperty('--tg-hover');
+                    root2.style.removeProperty('--tg-active-chat');
+                    root2.style.removeProperty('--tg-divider');
+                    root2.style.removeProperty('--tg-online');
+                    root2.style.removeProperty('--tg-link');
+                    root2.style.removeProperty('--tg-secondary');
+                    root2.style.removeProperty('--background');
+                    root2.style.removeProperty('--foreground');
+                    root2.style.removeProperty('--card');
+                    root2.style.removeProperty('--card-foreground');
+                    root2.style.removeProperty('--primary');
+                    root2.style.removeProperty('--primary-foreground');
+                    root2.style.removeProperty('--secondary');
+                    root2.style.removeProperty('--muted');
+                    root2.style.removeProperty('--muted-foreground');
+                    root2.style.removeProperty('--accent');
+                    root2.style.removeProperty('--border');
+                    root2.style.removeProperty('--input');
+                    root2.style.removeProperty('--ring');
+                    root2.style.removeProperty('--popover');
+                    root2.style.removeProperty('--popover-foreground');
+
                     return {
-                        appearance: { ...state.appearance, theme },
+                        appearance: { ...state.appearance, theme, themePreset: undefined },
                     };
                 }),
 

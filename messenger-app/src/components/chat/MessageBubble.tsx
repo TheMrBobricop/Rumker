@@ -2,7 +2,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { Check, CheckCheck, Edit2, Play, Pause } from 'lucide-react';
+import { Check, CheckCheck, Edit2, Play, Pause, Clock, AlertCircle } from 'lucide-react';
 import type { Message } from '@/types';
 import { CachedImage } from '@/components/media/CachedImage';
 import { MediaViewer, type MediaItem } from '@/components/media/MediaViewer';
@@ -203,8 +203,8 @@ export function MessageBubble({ message, isMe, showTail = true, showSenderName, 
     const showTails = appearance.showTails ?? true;
     const tailClass = showTail && showTails
         ? isMe
-            ? 'message-bubble-tail-out rounded-tr-sm'
-            : 'message-bubble-tail-in rounded-tl-sm'
+            ? 'message-bubble-tail-out rounded-br-none'
+            : 'message-bubble-tail-in rounded-bl-none'
         : '';
 
     const hasMedia = (message.type === 'image' || message.type === 'video') && message.mediaUrl;
@@ -279,16 +279,18 @@ export function MessageBubble({ message, isMe, showTail = true, showSenderName, 
                     {/* Video */}
                     {message.type === 'video' && message.mediaUrl && (
                         <div
-                            className="-mx-2.5 -mt-1.5 mb-1 overflow-hidden rounded-t-[var(--message-border-radius,12px)] cursor-pointer relative"
+                            className="-mx-2.5 -mt-1.5 mb-1 overflow-hidden rounded-t-[var(--message-border-radius,12px)] cursor-pointer relative bg-black min-h-[120px]"
                             onClick={() => setViewerOpen(true)}
                         >
                             <video
                                 src={message.mediaUrl}
-                                className="max-h-[300px] w-full object-contain"
+                                className="max-h-[300px] w-full object-contain bg-black"
                                 preload="metadata"
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ pointerEvents: 'none' }}
                             />
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                                <div className="bg-black/50 rounded-full p-3">
+                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 hover:bg-black/10 transition-colors">
+                                <div className="bg-black/50 rounded-full p-3 backdrop-blur-sm">
                                     <Play className="h-6 w-6 text-white fill-white" />
                                 </div>
                             </div>
@@ -321,9 +323,15 @@ export function MessageBubble({ message, isMe, showTail = true, showSenderName, 
                         <span>{time}</span>
                         {isMe && !isSticker && (
                             <span className={cn(
-                                message.status === 'read' ? 'text-tg-primary' : 'text-tg-text-secondary'
+                                message.status === 'read' ? 'text-tg-primary'
+                                    : message.status === 'error' ? 'text-red-500'
+                                    : 'text-tg-text-secondary'
                             )}>
-                                {message.status === 'read' ? (
+                                {message.status === 'sending' ? (
+                                    <Clock className="h-3 w-3 animate-pulse" />
+                                ) : message.status === 'error' ? (
+                                    <AlertCircle className="h-3 w-3" />
+                                ) : message.status === 'read' ? (
                                     <CheckCheck className="h-3 w-3" />
                                 ) : (
                                     <Check className="h-3 w-3" />

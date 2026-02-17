@@ -3,6 +3,11 @@ import type { Chat, Message } from '@/types';
 import { getChats, getMessages, sendMessage as apiSendMessage, editMessage as apiEditMessage, deleteMessage as apiDeleteMessage } from '@/lib/api/chats';
 import { useAuthStore } from './authStore';
 
+let tempIdCounter = 0;
+function generateTempId() {
+    return `__temp_${Date.now()}_${++tempIdCounter}`;
+}
+
 interface ChatStore {
     // State
     chats: Chat[];
@@ -139,32 +144,77 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         }),
 
     sendMessage: async (chatId: string, content: string, type?: 'text' | 'image' | 'video' | 'voice' | 'file', fileUrl?: string, replyToId?: string) => {
+        const authStore = useAuthStore.getState();
+        const currentUser = authStore.user;
+        const tempId = generateTempId();
+
+        // Optimistic: add message immediately with 'sending' status
+        const optimisticMessage: Message = {
+            id: tempId,
+            chatId,
+            senderId: currentUser?.id || '',
+            type: (type || 'text') as Message['type'],
+            content: content || '',
+            mediaUrl: fileUrl,
+            timestamp: new Date(),
+            status: 'sending',
+            isEdited: false,
+            replyTo: replyToId,
+            sender: currentUser ? {
+                id: currentUser.id,
+                username: currentUser.username || '',
+                firstName: currentUser.firstName,
+                lastName: currentUser.lastName,
+            } : undefined,
+        };
+
+        // Resolve replyToMessage from existing messages
+        const state = get();
+        const chatMessages = state.messages[chatId] || [];
+        if (replyToId) {
+            const replyMsg = chatMessages.find((m) => m.id === replyToId);
+            if (replyMsg) {
+                optimisticMessage.replyToMessage = {
+                    ...replyMsg,
+                    senderName: replyMsg.sender?.firstName || replyMsg.sender?.username || 'User',
+                } as any;
+            }
+        }
+
+        set((s) => ({
+            messages: {
+                ...s.messages,
+                [chatId]: [...(s.messages[chatId] || []), optimisticMessage],
+            },
+        }));
+
         try {
             const message = await apiSendMessage({ chatId, content, type: type || 'text', fileUrl, replyToId });
-            set((state) => {
-                const chatMessages = state.messages[chatId] || [];
-                // Resolve replyToMessage from existing messages if replyTo is set
-                let enrichedMessage = message;
-                if (message.replyTo && !message.replyToMessage) {
-                    const replyMsg = chatMessages.find((m) => m.id === message.replyTo);
-                    if (replyMsg) {
-                        enrichedMessage = {
-                            ...message,
-                            replyToMessage: {
-                                ...replyMsg,
-                                senderName: replyMsg.sender?.firstName || replyMsg.sender?.username || 'User',
-                            } as any,
-                        };
-                    }
-                }
+            // Replace temp message with real one
+            set((s) => {
+                const msgs = s.messages[chatId] || [];
                 return {
                     messages: {
-                        ...state.messages,
-                        [chatId]: [...chatMessages, enrichedMessage],
+                        ...s.messages,
+                        [chatId]: msgs.map((m) =>
+                            m.id === tempId ? { ...message, status: 'sent' as const } : m
+                        ),
                     },
                 };
             });
         } catch (error) {
+            // Mark optimistic message as error
+            set((s) => {
+                const msgs = s.messages[chatId] || [];
+                return {
+                    messages: {
+                        ...s.messages,
+                        [chatId]: msgs.map((m) =>
+                            m.id === tempId ? { ...m, status: 'error' as const } : m
+                        ),
+                    },
+                };
+            });
             console.error('Failed to send message:', error);
             throw error;
         }

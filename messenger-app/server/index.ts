@@ -9,6 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { initializeSocket } from './socket/index.js';
+import { runStartupMigrations } from './lib/migrate.js';
 
 // Загружаем переменные окружения
 dotenv.config();
@@ -37,7 +38,7 @@ app.use(
             scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Для разработки React с HMR
             imgSrc: ["'self'", "data:", "blob:", "https://*.supabase.co"],
             mediaSrc: ["'self'", "blob:", "https://*.supabase.co"],
-            connectSrc: ["'self'", CLIENT_URL, 'ws://localhost:3000', 'ws://localhost:3001', "https://*.supabase.co"],
+            connectSrc: ["'self'", CLIENT_URL, 'ws://localhost:3000', 'ws://localhost:3001', 'ws://localhost:5173', "https://*.supabase.co"],
         },
     })
 );
@@ -80,7 +81,8 @@ app.use(
 // app.use('/api', limiter); // Применяем лимит ко всем API запросам
 
 // --- Middleware ---
-app.use(express.json()); // Парсинг JSON
+app.use(express.json({ limit: '100mb' })); // Парсинг JSON (увеличенный лимит для больших запросов)
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 app.use(cookieParser()); // Парсинг кук
 
 // --- Статические файлы (локальные загрузки) ---
@@ -100,10 +102,10 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 // Запуск сервера
 if (process.env.NODE_ENV !== 'test') {
+    runStartupMigrations().catch(() => {});
     httpServer.listen(PORT, () => {
-        console.log(`🚀 Server running securely on port ${PORT}`);
-        console.log(`🔒 Security enabled: Helmet, CORS, RateLimit`);
-        console.log(`🔌 Socket.io ready`);
+        console.log(`Server running on port ${PORT}`);
+        console.log(`Socket.io ready`);
     });
 }
 

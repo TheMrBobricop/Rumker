@@ -448,11 +448,11 @@ export function MessageInput({
                 />
             )}
 
-            <div className="bg-tg-bg px-2 sm:px-4 py-1.5 shrink-0 transition-colors duration-200">
+            <div className="px-2 sm:px-4 py-1.5 shrink-0 transition-colors duration-200">
                 <div className="max-w-3xl mx-auto">
                     {/* Edit Bar */}
                     {editingMessage && (
-                        <div className="flex items-center justify-between border-l-2 border-blue-500 pl-2 mb-1.5 bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded-r">
+                        <div className="flex items-center justify-between border-l-2 border-blue-500 pl-2 mb-1.5 bg-card/90 backdrop-blur-sm p-1.5 rounded-r rounded-l-sm">
                             <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
                                 <Pencil className="h-3 w-3" />
                                 <span>Редактирование</span>
@@ -471,7 +471,7 @@ export function MessageInput({
 
                     {/* Reply Context */}
                     {!editingMessage && replyToMessage && (
-                        <div className="flex items-center justify-between border-l-2 border-tg-primary pl-2 mb-1.5 bg-black/5 dark:bg-white/5 p-1.5 rounded-r">
+                        <div className="flex items-center justify-between border-l-2 border-tg-primary pl-2 mb-1.5 bg-card/90 backdrop-blur-sm p-1.5 rounded-r rounded-l-sm">
                             <div className="flex-1 min-w-0">
                                 <div className="text-xs font-medium text-tg-primary">
                                     {replyToMessage.senderName}
@@ -501,7 +501,7 @@ export function MessageInput({
 
                     {/* Input bar — bigger TG-style */}
                     {isRecording ? (
-                        <div className="flex items-center gap-2 bg-tg-input-bg rounded-2xl px-3 py-1.5">
+                        <div className="flex items-center gap-2 bg-card/85 backdrop-blur-md rounded-2xl px-3 py-1.5 shadow-sm">
                             <button
                                 onClick={cancelRecording}
                                 className="h-10 w-10 shrink-0 flex items-center justify-center rounded-full text-red-500 hover:bg-red-500/10 transition-colors"
@@ -524,7 +524,7 @@ export function MessageInput({
                             </button>
                         </div>
                     ) : (
-                        <div className="flex items-center gap-1 bg-tg-input-bg rounded-2xl px-1.5 py-1">
+                        <div className="flex items-center gap-1 bg-card/85 backdrop-blur-md rounded-2xl px-1.5 py-1 shadow-sm">
                             {!editingMessage && (
                                 <button
                                     className="h-10 w-10 shrink-0 flex items-center justify-center rounded-full text-tg-text-secondary hover:text-tg-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors"

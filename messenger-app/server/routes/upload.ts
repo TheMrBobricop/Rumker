@@ -54,7 +54,7 @@ const ALLOWED_MIME_TYPES = [
 
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+    limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB
     fileFilter: (_req, file, cb) => {
         if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
             cb(null, true);
@@ -117,7 +117,7 @@ router.post('/', authenticateToken, (req: AuthRequest, res: Response, next: Next
     upload.single('file')(req as any, res, (err: any) => {
         if (err) {
             if (err.code === 'LIMIT_FILE_SIZE') {
-                return res.status(413).json({ message: 'File too large. Maximum size is 100MB' });
+                return res.status(413).json({ message: 'File too large. Maximum size is 1GB' });
             }
             console.error('Multer error:', err);
             return res.status(400).json({ message: err.message || 'File upload error' });

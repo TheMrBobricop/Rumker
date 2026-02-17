@@ -85,8 +85,8 @@ export function ChatList({ className }: ChatListProps) {
                             onClick={() => setActiveChat(chat)}
                             style={{ animationDelay: `${Math.min(index * 20, 200)}ms` }}
                             className={cn(
-                                'group flex w-full items-center gap-3 px-3 py-2.5 transition-colors hover:bg-tg-hover focus:outline-none active:bg-tg-hover/80 animate-fade-slide-in',
-                                isActive && 'bg-tg-active-chat hover:bg-tg-active-chat'
+                                'group flex w-full items-center gap-3 px-3 py-2 transition-colors hover:bg-tg-hover focus:outline-none active:bg-tg-hover/80 animate-fade-slide-in border-b border-tg-divider/50',
+                                isActive && 'bg-tg-active-chat hover:bg-tg-active-chat border-b-transparent'
                             )}
                         >
                             <div className="relative shrink-0">
@@ -157,9 +157,9 @@ export function ChatList({ className }: ChatListProps) {
                                     </div>
 
                                     <div className="flex items-center gap-1 shrink-0">
-                                        {lastMsg?.senderId === 'me' && !chat.unreadCount && (
+                                        {lastMsg?.senderId === currentUserId && !chat.unreadCount && (
                                             <div className={cn(isActive ? "text-white" : "text-tg-primary")}>
-                                                {lastMsg.status === 'read' ? (
+                                                {lastMsg?.status === 'read' ? (
                                                     <CheckCheck className="h-3.5 w-3.5" />
                                                 ) : (
                                                     <Check className="h-3.5 w-3.5" />
