@@ -208,6 +208,13 @@
       Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Safe area support for notched devices */
+  html {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
 
   /* Telegram-style scrollbar */
@@ -252,10 +259,10 @@
     position: absolute;
     bottom: 0;
     right: -8px;
-    width: 12px;
+    width: 10px;
     height: 16px;
-    background: var(--tg-message-out);
-    clip-path: polygon(0 0, 0% 100%, 100% 100%);
+    background: var(--bubble-color, var(--tg-message-out));
+    clip-path: path('M 0 0 C 0 6, 3 12, 10 16 L 0 16 Z');
   }
 
   .message-bubble-tail-in {
@@ -267,10 +274,10 @@
     position: absolute;
     bottom: 0;
     left: -8px;
-    width: 12px;
+    width: 10px;
     height: 16px;
-    background: var(--tg-message-in);
-    clip-path: polygon(100% 0, 0% 100%, 100% 100%);
+    background: var(--bubble-color, var(--tg-message-in));
+    clip-path: path('M 10 0 C 10 6, 7 12, 0 16 L 10 16 Z');
   }
 
   /* Transition utilities */
@@ -304,5 +311,98 @@
 
   .typing-dot:nth-child(3) {
     animation-delay: 0.4s;
+  }
+
+  /* Media viewer slide animations */
+  @keyframes slide-in {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes slide-out-left {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(-60px);
+    }
+  }
+
+  @keyframes slide-out-right {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(60px);
+    }
+  }
+
+  .animate-slide-in {
+    animation: slide-in 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  .animate-slide-out-left {
+    animation: slide-out-left 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  .animate-slide-out-right {
+    animation: slide-out-right 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  /* Page / panel transition animations */
+  @keyframes fade-slide-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fade-scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .animate-fade-slide-in {
+    animation: fade-slide-in 0.2s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  .animate-fade-scale-in {
+    animation: fade-scale-in 0.15s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  /* Message appear animation */
+  @keyframes message-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .animate-message-in {
+    animation: message-in 0.2s cubic-bezier(0.4, 0, 0.2, 1) both;
   }
 }

@@ -64,7 +64,7 @@ export function CachedImage({
                     src={mediaUrl}
                     alt={alt}
                     className={cn(
-                        'h-full w-full object-cover transition-opacity duration-300',
+                        'h-full w-full transition-opacity duration-300',
                         showThumbnail ? 'opacity-0' : 'opacity-100'
                     )}
                     {...props}

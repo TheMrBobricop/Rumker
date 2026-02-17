@@ -67,6 +67,11 @@ export interface MediaMetadata {
     fileName?: string;
 }
 
+export interface MessageReaction {
+    emoji: string;
+    userIds: string[];
+}
+
 export interface Message {
     id: string;
     chatId: string;
@@ -81,6 +86,14 @@ export interface Message {
     timestamp: Date;
     status: MessageStatus;
     isEdited: boolean;
+    reactions?: MessageReaction[];
+    sender?: {
+        id: string;
+        username: string;
+        firstName?: string;
+        lastName?: string;
+        avatar?: string;
+    };
 }
 
 // ---- Settings Types ----
@@ -88,6 +101,7 @@ export interface ChatBackground {
     type: 'color' | 'image' | 'gradient';
     value: string;
     opacity: number;
+    blur?: number; // 0-20px
 }
 
 export interface MessageBubbleSettings {
@@ -95,15 +109,19 @@ export interface MessageBubbleSettings {
     fontSize: number; // 12-20px
     outgoingColor: string;
     incomingColor: string;
+    outgoingTextColor: string;
+    incomingTextColor: string;
 }
 
 export interface ChatAppearanceSettings {
     chatBackground: ChatBackground;
     messageBubbles: MessageBubbleSettings;
     theme: 'light' | 'dark' | 'auto';
+    themePreset?: string;
     compactMode: boolean;
     showAvatars: boolean;
     showTimeStamps: boolean;
+    showTails?: boolean;
 }
 
 export interface CacheSettings {

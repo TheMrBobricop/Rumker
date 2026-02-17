@@ -1,19 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getFriends, getFriendRequests, acceptFriendRequest, rejectFriendRequest, removeFriend, type Friend, type FriendRequest } from '@/lib/api/friends';
-import { UserPlus, Check, X, UserMinus, Loader2 } from 'lucide-react';
+import { UserPlus, Check, X, UserMinus, Loader2, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { UserSearch } from './UserSearch';
 
 interface FriendsListProps {
     className?: string;
+    onMessageFriend?: (userId: string) => void;
 }
 
-export function FriendsList({ className }: FriendsListProps) {
+export function FriendsList({ className, onMessageFriend }: FriendsListProps) {
     const [friends, setFriends] = useState<Friend[]>([]);
     const [requests, setRequests] = useState<FriendRequest[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -46,10 +45,10 @@ export function FriendsList({ className }: FriendsListProps) {
         setProcessingId(requestId);
         try {
             await acceptFriendRequest(requestId);
-            toast.success('Friend request accepted');
+            toast.success('Заявка принята');
             loadData();
         } catch {
-            toast.error('Failed to accept request');
+            toast.error('Не удалось принять заявку');
         } finally {
             setProcessingId(null);
         }
@@ -59,10 +58,10 @@ export function FriendsList({ className }: FriendsListProps) {
         setProcessingId(requestId);
         try {
             await rejectFriendRequest(requestId);
-            toast.success('Friend request rejected');
+            toast.success('Заявка отклонена');
             loadData();
         } catch {
-            toast.error('Failed to reject request');
+            toast.error('Не удалось отклонить заявку');
         } finally {
             setProcessingId(null);
         }
@@ -72,10 +71,10 @@ export function FriendsList({ className }: FriendsListProps) {
         setProcessingId(friendId);
         try {
             await removeFriend(friendId);
-            toast.success('Friend removed');
+            toast.success('Друг удалён');
             loadData();
         } catch {
-            toast.error('Failed to remove friend');
+            toast.error('Не удалось удалить друга');
         } finally {
             setProcessingId(null);
         }
@@ -85,72 +84,78 @@ export function FriendsList({ className }: FriendsListProps) {
 
     if (isLoading) {
         return (
-            <Card className={cn('w-full', className)}>
-                <CardContent className="p-4">
-                    <div className="flex items-center justify-center py-8">
-                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </div>
-                </CardContent>
-            </Card>
+            <div className={cn('flex items-center justify-center py-8', className)}>
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
         );
     }
 
     return (
-        <Card className={cn('w-full', className)}>
-            <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                    <UserPlus className="h-5 w-5" />
-                    Friends
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-                {/* Search Bar */}
-                <div className="p-4 border-b">
-                    <UserSearch onAddFriend={handleAddFriend} />
-                </div>
-                
-                <Tabs defaultValue="friends" className="w-full">
-                    <TabsList className="w-full grid grid-cols-2">
-                        <TabsTrigger value="friends">
-                            Friends ({friends.length})
-                        </TabsTrigger>
-                        <TabsTrigger value="requests">
-                            Requests ({requests.length})
-                        </TabsTrigger>
-                    </TabsList>
+        <div className={cn('flex flex-col h-full', className)}>
+            {/* Search Bar */}
+            <div className="px-3 py-2 border-b border-border shrink-0">
+                <UserSearch onAddFriend={handleAddFriend} />
+            </div>
 
-                    <TabsContent value="friends" className="mt-0">
-                        {friends.length === 0 ? (
-                            <div className="text-center py-8 text-muted-foreground">
-                                No friends yet. Search for users to add them!
-                            </div>
-                        ) : (
-                            <div className="divide-y">
-                                {friends.map((friend) => (
-                                    <div
-                                        key={friend.id}
-                                        className="flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors"
-                                    >
-                                        <Avatar className="h-10 w-10">
-                                            <AvatarImage src={friend.friend.avatar} />
-                                            <AvatarFallback className="bg-tg-primary/10 text-tg-primary">
-                                                {getInitials(friend.friend.firstName || friend.friend.username)}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-medium text-sm truncate">
-                                                {friend.friend.firstName} {friend.friend.lastName}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground truncate">
-                                                @{friend.friend.username}
-                                                {friend.friend.isOnline && (
-                                                    <span className="ml-2 text-tg-online">online</span>
-                                                )}
-                                            </p>
-                                        </div>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
+            <Tabs defaultValue="friends" className="flex flex-col flex-1 min-h-0">
+                <TabsList className="w-full grid grid-cols-2 shrink-0 rounded-none border-b border-border bg-transparent h-auto p-0">
+                    <TabsTrigger
+                        value="friends"
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-tg-primary data-[state=active]:bg-transparent data-[state=active]:text-tg-primary py-2 text-sm"
+                    >
+                        Друзья ({friends.length})
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="requests"
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-tg-primary data-[state=active]:bg-transparent data-[state=active]:text-tg-primary py-2 text-sm"
+                    >
+                        Заявки ({requests.length})
+                    </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="friends" className="mt-0 flex-1 overflow-y-auto">
+                    {friends.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 px-6 text-center text-muted-foreground">
+                            <UserPlus className="h-10 w-10 mb-3 text-muted-foreground/40" />
+                            <p className="text-sm">Нет друзей</p>
+                            <p className="text-xs mt-1 text-muted-foreground/70">Найдите пользователей через поиск выше</p>
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-border">
+                            {friends.map((friend) => (
+                                <div
+                                    key={friend.id}
+                                    className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 transition-colors"
+                                >
+                                    <Avatar className="h-10 w-10 shrink-0">
+                                        <AvatarImage src={friend.friend.avatar} />
+                                        <AvatarFallback className="bg-tg-primary/10 text-tg-primary text-sm">
+                                            {getInitials(friend.friend.firstName || friend.friend.username)}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-sm truncate">
+                                            {friend.friend.firstName} {friend.friend.lastName}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground truncate">
+                                            @{friend.friend.username}
+                                            {friend.friend.isOnline && (
+                                                <span className="ml-2 text-green-500">online</span>
+                                            )}
+                                        </p>
+                                    </div>
+                                    <div className="flex gap-1 shrink-0">
+                                        {onMessageFriend && (
+                                            <button
+                                                className="h-9 w-9 flex items-center justify-center rounded-full hover:bg-tg-primary/10 transition-colors"
+                                                onClick={() => onMessageFriend(friend.friend.id)}
+                                                title="Написать"
+                                            >
+                                                <MessageSquare className="h-4 w-4 text-tg-primary" />
+                                            </button>
+                                        )}
+                                        <button
+                                            className="h-9 w-9 flex items-center justify-center rounded-full hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
                                             onClick={() => handleRemove(friend.friend.id)}
                                             disabled={processingId === friend.friend.id}
                                         >
@@ -159,75 +164,71 @@ export function FriendsList({ className }: FriendsListProps) {
                                             ) : (
                                                 <UserMinus className="h-4 w-4 text-red-500" />
                                             )}
-                                        </Button>
+                                        </button>
                                     </div>
-                                ))}
-                            </div>
-                        )}
-                    </TabsContent>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </TabsContent>
 
-                    <TabsContent value="requests" className="mt-0">
-                        {requests.length === 0 ? (
-                            <div className="text-center py-8 text-muted-foreground">
-                                No pending friend requests
-                            </div>
-                        ) : (
-                            <div className="divide-y">
-                                {requests.map((request) => (
-                                    <div
-                                        key={request.id}
-                                        className="flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors"
-                                    >
-                                        <Avatar className="h-10 w-10">
-                                            <AvatarImage src={request.sender?.avatar} />
-                                            <AvatarFallback className="bg-tg-primary/10 text-tg-primary">
-                                                {getInitials(request.sender?.firstName || request.sender?.username || '?')}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-medium text-sm truncate">
-                                                {request.sender?.firstName} {request.sender?.lastName}
+                <TabsContent value="requests" className="mt-0 flex-1 overflow-y-auto">
+                    {requests.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 px-6 text-center text-muted-foreground">
+                            <p className="text-sm">Нет заявок</p>
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-border">
+                            {requests.map((request) => (
+                                <div
+                                    key={request.id}
+                                    className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 transition-colors"
+                                >
+                                    <Avatar className="h-10 w-10 shrink-0">
+                                        <AvatarImage src={request.sender?.avatar} />
+                                        <AvatarFallback className="bg-tg-primary/10 text-tg-primary text-sm">
+                                            {getInitials(request.sender?.firstName || request.sender?.username || '?')}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-sm truncate">
+                                            {request.sender?.firstName} {request.sender?.lastName}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground truncate">
+                                            @{request.sender?.username}
+                                        </p>
+                                        {request.message && (
+                                            <p className="text-xs text-muted-foreground mt-0.5 italic truncate">
+                                                &quot;{request.message}&quot;
                                             </p>
-                                            <p className="text-xs text-muted-foreground truncate">
-                                                @{request.sender?.username}
-                                            </p>
-                                            {request.message && (
-                                                <p className="text-xs text-muted-foreground mt-1 italic">
-                                                    "{request.message}"
-                                                </p>
-                                            )}
-                                        </div>
-                                        <div className="flex gap-1">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => handleAccept(request.id)}
-                                                disabled={processingId === request.id}
-                                                className="hover:bg-green-100"
-                                            >
-                                                {processingId === request.id ? (
-                                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                                ) : (
-                                                    <Check className="h-4 w-4 text-green-600" />
-                                                )}
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => handleReject(request.id)}
-                                                disabled={processingId === request.id}
-                                                className="hover:bg-red-100"
-                                            >
-                                                <X className="h-4 w-4 text-red-600" />
-                                            </Button>
-                                        </div>
+                                        )}
                                     </div>
-                                ))}
-                            </div>
-                        )}
-                    </TabsContent>
-                </Tabs>
-            </CardContent>
-        </Card>
+                                    <div className="flex gap-1 shrink-0">
+                                        <button
+                                            className="h-9 w-9 flex items-center justify-center rounded-full hover:bg-green-100 dark:hover:bg-green-900/20 transition-colors disabled:opacity-50"
+                                            onClick={() => handleAccept(request.id)}
+                                            disabled={processingId === request.id}
+                                        >
+                                            {processingId === request.id ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <Check className="h-4 w-4 text-green-600" />
+                                            )}
+                                        </button>
+                                        <button
+                                            className="h-9 w-9 flex items-center justify-center rounded-full hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                                            onClick={() => handleReject(request.id)}
+                                            disabled={processingId === request.id}
+                                        >
+                                            <X className="h-4 w-4 text-red-600" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </TabsContent>
+            </Tabs>
+        </div>
     );
 }

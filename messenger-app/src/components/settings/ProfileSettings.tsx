@@ -1,5 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useAuthStore } from '@/stores/authStore';
+import { api } from '@/lib/api/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +25,41 @@ export function ProfileSettings() {
 
     const [isLoading, setIsLoading] = useState(false);
 
+    // Load profile from API on mount
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const data = await api.get<{ user: any }>('/users/me/profile');
+                if (cancelled) return;
+                const u = data.user;
+                const profileData = {
+                    id: u.id,
+                    username: u.username || '',
+                    firstName: u.firstName || '',
+                    lastName: u.lastName || '',
+                    bio: u.bio || '',
+                    email: u.email || '',
+                    phone: u.phone || '',
+                    avatar: u.avatar || '',
+                };
+                setFormData({
+                    username: profileData.username,
+                    firstName: profileData.firstName,
+                    lastName: profileData.lastName,
+                    bio: profileData.bio,
+                    email: profileData.email,
+                    phone: profileData.phone,
+                });
+                updateProfile(profileData);
+            } catch {
+                // Fallback to local store data
+            }
+        })();
+        return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const handleChange = (field: string, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
@@ -30,8 +67,33 @@ export function ProfileSettings() {
     const handleSave = async () => {
         setIsLoading(true);
         try {
-            // TODO: API call to update profile
-            updateProfile(formData);
+            const data = await api.patch<{ user: any }>('/users/me/profile', {
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                bio: formData.bio,
+                avatar: profile.avatar,
+            });
+            const u = data.user;
+            const updatedProfile = {
+                id: u.id,
+                username: u.username || '',
+                firstName: u.firstName || '',
+                lastName: u.lastName || '',
+                bio: u.bio || '',
+                email: u.email || '',
+                phone: u.phone || '',
+                avatar: u.avatar || '',
+            };
+            updateProfile(updatedProfile);
+            // Sync to auth store
+            const authState = useAuthStore.getState();
+            if (authState.user && authState.token) {
+                authState.login(
+                    { ...authState.user, firstName: u.firstName, lastName: u.lastName, bio: u.bio, avatar: u.avatar },
+                    authState.token,
+                    authState.refreshToken || undefined
+                );
+            }
             toast.success('Profile updated successfully');
         } catch {
             toast.error('Failed to update profile');
@@ -44,11 +106,39 @@ export function ProfileSettings() {
         fileInputRef.current?.click();
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            toast.success('Avatar upload started');
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            toast.error('Выберите изображение');
+            return;
         }
+        try {
+            // Upload avatar to server
+            const result = await api.uploadFile('/upload', file) as { url: string };
+            const avatarUrl = result.url;
+            updateProfile({ avatar: avatarUrl });
+            // Sync to auth store
+            const authState = useAuthStore.getState();
+            if (authState.user && authState.token) {
+                authState.login({ ...authState.user, avatar: avatarUrl }, authState.token, authState.refreshToken || undefined);
+            }
+            toast.success('Аватар обновлён');
+        } catch {
+            // Fallback to local data URL
+            const reader = new FileReader();
+            reader.onload = () => {
+                const dataUrl = reader.result as string;
+                updateProfile({ avatar: dataUrl });
+                const authState = useAuthStore.getState();
+                if (authState.user && authState.token) {
+                    authState.login({ ...authState.user, avatar: dataUrl }, authState.token, authState.refreshToken || undefined);
+                }
+                toast.success('Аватар обновлён (локально)');
+            };
+            reader.readAsDataURL(file);
+        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     const getInitials = () => {

@@ -3,8 +3,9 @@
 // ========================================
 
 import { useAuthStore } from '@/stores/authStore';
+import { tokenStorage } from '@/lib/tokenStorage';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 interface RequestOptions {
     method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -15,18 +16,15 @@ interface RequestOptions {
 
 class ApiClient {
     private baseUrl: string;
-    private token: string | null = null;
+    private refreshPromise: Promise<boolean> | null = null;
 
     constructor(baseUrl: string) {
         this.baseUrl = baseUrl;
     }
 
-    setToken(token: string | null): void {
-        this.token = token;
-    }
-
-    getToken(): string | null {
-        return this.token;
+    private getToken(): string | null {
+        const authStore = useAuthStore.getState();
+        return authStore.token || tokenStorage.getToken();
     }
 
     private getHeaders(customHeaders?: Record<string, string>): Headers {
@@ -35,13 +33,57 @@ class ApiClient {
             ...customHeaders,
         });
 
-        // Автоматически получаем токен из authStore
-        const token = useAuthStore.getState().token;
+        const token = this.getToken();
         if (token) {
             headers.set('Authorization', `Bearer ${token}`);
         }
 
         return headers;
+    }
+
+    private async tryRefreshToken(): Promise<boolean> {
+        // Deduplicate concurrent refresh calls
+        if (this.refreshPromise) return this.refreshPromise;
+
+        this.refreshPromise = (async () => {
+            try {
+                const authStore = useAuthStore.getState();
+                const refreshToken = authStore.refreshToken;
+
+                if (!refreshToken) {
+                    authStore.logout();
+                    tokenStorage.setToken(null);
+                    return false;
+                }
+
+                const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refreshToken }),
+                    credentials: 'include',
+                });
+
+                if (!response.ok) {
+                    // Session is dead — logout once
+                    authStore.logout();
+                    tokenStorage.setToken(null);
+                    return false;
+                }
+
+                const data = await response.json();
+                authStore.setTokens(data.accessToken, data.refreshToken);
+                tokenStorage.setToken(data.accessToken);
+                return true;
+            } catch {
+                useAuthStore.getState().logout();
+                tokenStorage.setToken(null);
+                return false;
+            } finally {
+                this.refreshPromise = null;
+            }
+        })();
+
+        return this.refreshPromise;
     }
 
     async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
@@ -60,13 +102,28 @@ class ApiClient {
             config.body = JSON.stringify(body);
         }
 
-        const response = await fetch(url, config);
+        let response = await fetch(url, config);
+
+        // Auto-refresh on 401/403
+        if ((response.status === 401 || response.status === 403) && !endpoint.includes('/auth/')) {
+            const refreshed = await this.tryRefreshToken();
+            if (refreshed) {
+                // Retry with new token
+                const newHeaders = this.getHeaders(customHeaders);
+                const retryConfig: RequestInit = { method, headers: newHeaders, signal };
+                if (body && method !== 'GET') {
+                    retryConfig.body = JSON.stringify(body);
+                }
+                response = await fetch(url, retryConfig);
+            }
+            // Don't logout here — let the caller or App-level logic handle session expiry
+        }
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => null);
             throw new ApiError(
                 response.status,
-                errorData?.message || response.statusText,
+                errorData?.message || errorData?.error || response.statusText,
                 errorData
             );
         }
@@ -109,24 +166,37 @@ class ApiClient {
         }
 
         const headers = new Headers();
-        // Автоматически получаем токен из authStore
-        const token = useAuthStore.getState().token;
+        const token = this.getToken();
         if (token) {
             headers.set('Authorization', `Bearer ${token}`);
         }
-        // Do NOT set Content-Type — the browser will set it with the boundary
 
-        const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        let response = await fetch(`${this.baseUrl}${endpoint}`, {
             method: 'POST',
             headers,
             body: formData,
         });
 
+        // Auto-refresh on 401/403
+        if (response.status === 401 || response.status === 403) {
+            const refreshed = await this.tryRefreshToken();
+            if (refreshed) {
+                const retryHeaders = new Headers();
+                const newToken = this.getToken();
+                if (newToken) retryHeaders.set('Authorization', `Bearer ${newToken}`);
+                response = await fetch(`${this.baseUrl}${endpoint}`, {
+                    method: 'POST',
+                    headers: retryHeaders,
+                    body: formData,
+                });
+            }
+        }
+
         if (!response.ok) {
             const errorData = await response.json().catch(() => null);
             throw new ApiError(
                 response.status,
-                errorData?.message || response.statusText,
+                errorData?.message || errorData?.error || response.statusText,
                 errorData
             );
         }

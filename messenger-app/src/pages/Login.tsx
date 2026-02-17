@@ -18,6 +18,7 @@ import { Phone, ArrowRight, Loader2, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { toast } from 'sonner';
+import { tokenStorage } from '@/lib/tokenStorage';
 
 // --- Schemas ---
 const phoneSchema = z.object({
@@ -123,7 +124,8 @@ export function LoginPage() {
             if (!res.ok) throw new Error(json.error || 'Login failed');
 
             toast.success(`Welcome back, ${json.user.firstName}!`);
-            login(json.user, json.accessToken);
+            login(json.user, json.accessToken, json.refreshToken);
+            tokenStorage.setToken(json.accessToken);
             navigate('/');
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Failed to send code';
@@ -148,7 +150,8 @@ export function LoginPage() {
             if (!res.ok) throw new Error(json.error || 'Auth failed');
 
             toast.success(`Welcome, ${json.user.username}!`);
-            login(json.user, json.accessToken);
+            login(json.user, json.accessToken, json.refreshToken);
+            tokenStorage.setToken(json.accessToken);
             navigate('/');
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Failed to send code';
@@ -159,8 +162,8 @@ export function LoginPage() {
     };
 
     return (
-        <div className="flex h-screen items-center justify-center bg-tg-bg px-4 py-8">
-            <Card className="w-full max-w-sm border-tg-divider bg-white shadow-lg dark:bg-tg-header">
+        <div className="flex h-dvh items-center justify-center bg-tg-bg px-4 py-6">
+            <Card className="w-full max-w-sm border-tg-divider bg-white shadow-lg dark:bg-tg-header overflow-hidden animate-fade-scale-in">
                 <CardHeader className="text-center pb-2">
                     <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-tg-primary/10 text-tg-primary">
                         {activeTab === 'telegram' ? <Phone className="h-8 w-8" /> : <Mail className="h-8 w-8" />}

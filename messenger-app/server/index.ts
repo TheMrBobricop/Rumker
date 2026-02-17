@@ -1,5 +1,6 @@
 
 import express from 'express';
+import { createServer } from 'http';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -7,6 +8,7 @@ import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import { initializeSocket } from './socket/index.js';
 
 // Загружаем переменные окружения
 dotenv.config();
@@ -17,6 +19,11 @@ const PORT = process.env.PORT || 3000;
 
 // Инициализация Express
 const app = express();
+const httpServer = createServer(app);
+
+// Initialize Socket.io
+const io = initializeSocket(httpServer);
+app.set('io', io);
 
 // --- Блокировка и защита (Фаза 2.2) ---
 
@@ -28,8 +35,9 @@ app.use(
         directives: {
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Для разработки React с HMR
-            imgSrc: ["'self'", "data:", "blob:"], // Разрешаем загрузку изображений
-            connectSrc: ["'self'", CLIENT_URL, 'ws://localhost:3001'], // WebSocket + API
+            imgSrc: ["'self'", "data:", "blob:", "https://*.supabase.co"],
+            mediaSrc: ["'self'", "blob:", "https://*.supabase.co"],
+            connectSrc: ["'self'", CLIENT_URL, 'ws://localhost:3000', 'ws://localhost:3001', "https://*.supabase.co"],
         },
     })
 );
@@ -56,7 +64,7 @@ app.use(
             callback(new Error('Not allowed by CORS'));
         },
         credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
     })
 );
@@ -75,21 +83,27 @@ app.use(
 app.use(express.json()); // Парсинг JSON
 app.use(cookieParser()); // Парсинг кук
 
+// --- Статические файлы (локальные загрузки) ---
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
+
 // --- API Роуты ---
 import routes from './routes/index.js';
 app.use('/api', routes);
 
 // Глобальный обработчик ошибок
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error(err.stack);
-    res.status(500).json({ error: 'Something broke!', details: err.message });
+    console.error('Global error:', err.message);
+    res.status(err.status || 500).json({ message: err.message || 'Internal server error' });
 });
 
 // Запуск сервера
 if (process.env.NODE_ENV !== 'test') {
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
         console.log(`🚀 Server running securely on port ${PORT}`);
         console.log(`🔒 Security enabled: Helmet, CORS, RateLimit`);
+        console.log(`🔌 Socket.io ready`);
     });
 }
 

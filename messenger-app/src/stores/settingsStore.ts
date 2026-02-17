@@ -7,6 +7,7 @@ import type {
     NotificationSettings,
     PrivacySettings,
 } from '@/types';
+import { THEME_PRESETS, applyThemePreset } from '@/lib/themes';
 
 interface SettingsStore {
     // State
@@ -25,25 +26,31 @@ interface SettingsStore {
     updatePrivacy: (settings: Partial<PrivacySettings>) => void;
     setLanguage: (language: string) => void;
     setTheme: (theme: 'light' | 'dark' | 'auto') => void;
+    setThemePreset: (presetId: string) => void;
     resetSettings: () => void;
 }
 
 const defaultAppearance: ChatAppearanceSettings = {
     chatBackground: {
         type: 'color',
-        value: '#e8dfd3',
+        value: '#f5f6f8',
         opacity: 1,
+        blur: 0,
     },
     messageBubbles: {
         borderRadius: 12,
         fontSize: 14,
         outgoingColor: '#EFFDDE',
         incomingColor: '#FFFFFF',
+        outgoingTextColor: '#2d3748',
+        incomingTextColor: '#2d3748',
     },
     theme: 'light',
+    themePreset: 'classic',
     compactMode: false,
     showAvatars: true,
     showTimeStamps: true,
+    showTails: true,
 };
 
 const defaultCache: CacheSettings = {
@@ -141,6 +148,32 @@ export const useSettingsStore = create<SettingsStore>()(
 
                     return {
                         appearance: { ...state.appearance, theme },
+                    };
+                }),
+
+            setThemePreset: (presetId) =>
+                set((state) => {
+                    const preset = THEME_PRESETS.find((p) => p.id === presetId);
+                    if (!preset) return state;
+
+                    applyThemePreset(presetId);
+
+                    return {
+                        appearance: {
+                            ...state.appearance,
+                            themePreset: presetId,
+                            theme: preset.isDark ? 'dark' : 'light',
+                            messageBubbles: {
+                                ...state.appearance.messageBubbles,
+                                ...preset.messageBubbles,
+                            },
+                            chatBackground: {
+                                type: 'color',
+                                value: preset.colors['--tg-bg'],
+                                opacity: 1,
+                                blur: 0,
+                            },
+                        },
                     };
                 }),
 

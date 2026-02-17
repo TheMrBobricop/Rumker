@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Chat, Message } from '@/types';
-import { getChats, getMessages, sendMessage as apiSendMessage } from '@/lib/api/chats';
+import { getChats, getMessages, sendMessage as apiSendMessage, editMessage as apiEditMessage, deleteMessage as apiDeleteMessage } from '@/lib/api/chats';
 import { useAuthStore } from './authStore';
 
 interface ChatStore {
@@ -8,8 +8,10 @@ interface ChatStore {
     chats: Chat[];
     activeChat: Chat | null;
     messages: Record<string, Message[]>;
+    hasMore: Record<string, boolean>;
     isLoading: boolean;
     isLoadingMessages: boolean;
+    isLoadingMore: boolean;
     searchQuery: string;
     typingUsers: Record<string, string[]>; // chatId -> userId[]
 
@@ -18,10 +20,14 @@ interface ChatStore {
     loadChats: () => Promise<void>;
     setActiveChat: (chat: Chat | null) => void;
     loadMessages: (chatId: string) => Promise<void>;
+    loadMoreMessages: (chatId: string) => Promise<void>;
     addMessage: (message: Message) => void;
-    sendMessage: (chatId: string, content: string) => Promise<void>;
+    sendMessage: (chatId: string, content: string, type?: 'text' | 'image' | 'video' | 'voice' | 'file', fileUrl?: string, replyToId?: string) => Promise<void>;
     updateMessage: (message: Message) => void;
     deleteMessage: (chatId: string, messageId: string) => void;
+    editMessageApi: (chatId: string, messageId: string, content: string) => Promise<void>;
+    deleteMessageApi: (chatId: string, messageId: string) => Promise<void>;
+    toggleReaction: (chatId: string, messageId: string, emoji: string, userId: string) => void;
     setMessages: (chatId: string, messages: Message[]) => void;
     markAsRead: (chatId: string, messageId: string) => void;
     setSearchQuery: (query: string) => void;
@@ -33,13 +39,17 @@ interface ChatStore {
     clearUnread: (chatId: string) => void;
 }
 
-export const useChatStore = create<ChatStore>((set) => ({
+const PAGE_SIZE = 50;
+
+export const useChatStore = create<ChatStore>((set, get) => ({
     // Initial state
     chats: [],
     activeChat: null,
     messages: {},
+    hasMore: {},
     isLoading: false,
     isLoadingMessages: false,
+    isLoadingMore: false,
     searchQuery: '',
     typingUsers: {},
 
@@ -70,11 +80,15 @@ export const useChatStore = create<ChatStore>((set) => ({
     loadMessages: async (chatId: string) => {
         set({ isLoadingMessages: true });
         try {
-            const messages = await getMessages(chatId);
+            const messages = await getMessages(chatId, PAGE_SIZE, 0);
             set((state) => ({
                 messages: {
                     ...state.messages,
                     [chatId]: messages,
+                },
+                hasMore: {
+                    ...state.hasMore,
+                    [chatId]: messages.length >= PAGE_SIZE,
                 },
                 isLoadingMessages: false,
             }));
@@ -84,9 +98,38 @@ export const useChatStore = create<ChatStore>((set) => ({
         }
     },
 
+    loadMoreMessages: async (chatId: string) => {
+        const state = get();
+        if (state.isLoadingMore || !state.hasMore[chatId]) return;
+
+        set({ isLoadingMore: true });
+        try {
+            const currentMessages = state.messages[chatId] || [];
+            const olderMessages = await getMessages(chatId, PAGE_SIZE, currentMessages.length);
+            set((s) => ({
+                messages: {
+                    ...s.messages,
+                    [chatId]: [...olderMessages, ...currentMessages],
+                },
+                hasMore: {
+                    ...s.hasMore,
+                    [chatId]: olderMessages.length >= PAGE_SIZE,
+                },
+                isLoadingMore: false,
+            }));
+        } catch (error) {
+            console.error('Failed to load more messages:', error);
+            set({ isLoadingMore: false });
+        }
+    },
+
     addMessage: (message) =>
         set((state) => {
             const chatMessages = state.messages[message.chatId] || [];
+            // Deduplicate: skip if message with same ID already exists
+            if (chatMessages.some((m) => m.id === message.id)) {
+                return state;
+            }
             return {
                 messages: {
                     ...state.messages,
@@ -95,15 +138,29 @@ export const useChatStore = create<ChatStore>((set) => ({
             };
         }),
 
-    sendMessage: async (chatId: string, content: string) => {
+    sendMessage: async (chatId: string, content: string, type?: 'text' | 'image' | 'video' | 'voice' | 'file', fileUrl?: string, replyToId?: string) => {
         try {
-            const message = await apiSendMessage({ chatId, content, type: 'text' });
+            const message = await apiSendMessage({ chatId, content, type: type || 'text', fileUrl, replyToId });
             set((state) => {
                 const chatMessages = state.messages[chatId] || [];
+                // Resolve replyToMessage from existing messages if replyTo is set
+                let enrichedMessage = message;
+                if (message.replyTo && !message.replyToMessage) {
+                    const replyMsg = chatMessages.find((m) => m.id === message.replyTo);
+                    if (replyMsg) {
+                        enrichedMessage = {
+                            ...message,
+                            replyToMessage: {
+                                ...replyMsg,
+                                senderName: replyMsg.sender?.firstName || replyMsg.sender?.username || 'User',
+                            } as any,
+                        };
+                    }
+                }
                 return {
                     messages: {
                         ...state.messages,
-                        [chatId]: [...chatMessages, message],
+                        [chatId]: [...chatMessages, enrichedMessage],
                     },
                 };
             });
@@ -133,6 +190,71 @@ export const useChatStore = create<ChatStore>((set) => ({
                 messages: {
                     ...state.messages,
                     [chatId]: chatMessages.filter((m) => m.id !== messageId),
+                },
+            };
+        }),
+
+    editMessageApi: async (chatId: string, messageId: string, content: string) => {
+        try {
+            const updated = await apiEditMessage(chatId, messageId, content);
+            set((state) => {
+                const chatMessages = state.messages[chatId] || [];
+                return {
+                    messages: {
+                        ...state.messages,
+                        [chatId]: chatMessages.map((m) =>
+                            m.id === messageId ? { ...m, content: updated.content, isEdited: true } : m
+                        ),
+                    },
+                };
+            });
+        } catch (error) {
+            console.error('Failed to edit message:', error);
+            throw error;
+        }
+    },
+
+    deleteMessageApi: async (chatId: string, messageId: string) => {
+        try {
+            await apiDeleteMessage(chatId, messageId);
+            set((state) => {
+                const chatMessages = state.messages[chatId] || [];
+                return {
+                    messages: {
+                        ...state.messages,
+                        [chatId]: chatMessages.filter((m) => m.id !== messageId),
+                    },
+                };
+            });
+        } catch (error) {
+            console.error('Failed to delete message:', error);
+            throw error;
+        }
+    },
+
+    toggleReaction: (chatId, messageId, emoji, userId) =>
+        set((state) => {
+            const chatMessages = state.messages[chatId] || [];
+            return {
+                messages: {
+                    ...state.messages,
+                    [chatId]: chatMessages.map((m) => {
+                        if (m.id !== messageId) return m;
+                        const reactions = [...(m.reactions || [])];
+                        const existing = reactions.find((r) => r.emoji === emoji);
+                        if (existing) {
+                            if (existing.userIds.includes(userId)) {
+                                existing.userIds = existing.userIds.filter((id) => id !== userId);
+                                if (existing.userIds.length === 0) {
+                                    return { ...m, reactions: reactions.filter((r) => r.emoji !== emoji) };
+                                }
+                            } else {
+                                existing.userIds = [...existing.userIds, userId];
+                            }
+                            return { ...m, reactions: [...reactions] };
+                        }
+                        return { ...m, reactions: [...reactions, { emoji, userIds: [userId] }] };
+                    }),
                 },
             };
         }),

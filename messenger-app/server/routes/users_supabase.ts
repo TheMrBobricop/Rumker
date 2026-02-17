@@ -7,13 +7,9 @@ const router = Router();
 // Search users by username
 router.get('/search', authenticateToken, async (req: AuthRequest, res) => {
     try {
-        const { query } = req.query;
-        
-        if (!query || typeof query !== 'string') {
-            return res.status(400).json({ error: 'Search query is required' });
-        }
+        const query = typeof req.query.query === 'string' ? req.query.query : '';
 
-        const { data: users, error } = await supabase
+        let request = supabase
             .from('users')
             .select(`
                 id,
@@ -25,9 +21,16 @@ router.get('/search', authenticateToken, async (req: AuthRequest, res) => {
                 is_online,
                 last_seen
             `)
-            .ilike('username', `%${query.toLowerCase()}%`)
             .neq('id', req.user?.userId)
             .limit(20);
+
+        if (query) {
+            let q = query.toLowerCase();
+            if (q.startsWith('@')) q = q.slice(1);
+            request = request.or(`username.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`);
+        }
+
+        const { data: users, error } = await request;
 
         if (error) {
             console.error('Supabase search error:', error);
@@ -50,6 +53,53 @@ router.get('/search', authenticateToken, async (req: AuthRequest, res) => {
     } catch (error) {
         console.error('User search error:', error);
         res.status(500).json({ error: 'Failed to search users' });
+    }
+});
+
+// Get user by ID
+router.get('/id/:userId', authenticateToken, async (req: AuthRequest, res) => {
+    try {
+        const { userId } = req.params;
+        if (typeof userId !== 'string') {
+            return res.status(400).json({ error: 'Invalid user ID' });
+        }
+
+        const { data: user, error } = await supabase
+            .from('users')
+            .select(`
+                id,
+                username,
+                first_name,
+                last_name,
+                avatar,
+                bio,
+                phone,
+                is_online,
+                last_seen
+            `)
+            .eq('id', userId)
+            .single();
+
+        if (error || !user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const formattedUser = {
+            id: user.id,
+            username: user.username,
+            firstName: user.first_name,
+            lastName: user.last_name,
+            avatar: user.avatar,
+            bio: user.bio,
+            phone: user.phone,
+            isOnline: user.is_online,
+            lastSeen: user.last_seen
+        };
+
+        res.json({ user: formattedUser });
+    } catch (error) {
+        console.error('Get user by ID error:', error);
+        res.status(500).json({ error: 'Failed to get user' });
     }
 });
 

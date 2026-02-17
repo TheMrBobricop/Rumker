@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ProfileSettings, AppearanceSettings, CacheSettings } from '@/components/settings';
+import { ProfileSettings, AppearanceSettings, CacheSettings, NotificationSettings, PrivacySettings } from '@/components/settings';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ArrowLeft, User, Palette, Database, Bell, Shield } from 'lucide-react';
@@ -29,17 +29,9 @@ export function SettingsPage() {
             case 'cache':
                 return <CacheSettings />;
             case 'notifications':
-                return (
-                    <div className="p-8 text-center text-muted-foreground">
-                        Notifications settings coming soon...
-                    </div>
-                );
+                return <NotificationSettings />;
             case 'privacy':
-                return (
-                    <div className="p-8 text-center text-muted-foreground">
-                        Privacy settings coming soon...
-                    </div>
-                );
+                return <PrivacySettings />;
             default:
                 return null;
         }
@@ -94,7 +86,7 @@ export function SettingsPage() {
 
             {/* Content */}
             <main className="flex-1 overflow-y-auto">
-                <div className="max-w-2xl mx-auto p-6">
+                <div key={activeTab} className="max-w-2xl mx-auto p-6 animate-fade-slide-in">
                     {renderContent()}
                 </div>
             </main>

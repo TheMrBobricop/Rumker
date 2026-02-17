@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -36,22 +36,23 @@ export function MainMenu() {
                     <Menu className="h-5 w-5" />
                 </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-[280px] p-0">
+            <SheetContent side="left" className="w-[280px] sm:w-[300px] p-0" aria-describedby={undefined}>
+                <SheetTitle className="sr-only">Меню</SheetTitle>
                 <div className="flex flex-col h-full">
                     {/* User Header */}
-                    <div className="bg-tg-primary p-4 text-white">
+                    <div className="bg-tg-header p-4 text-white">
                         <div className="flex items-center gap-3">
-                            <Avatar className="h-12 w-12 border-2 border-white/30">
+                            <Avatar className="h-11 w-11 border-2 border-white/20">
                                 <AvatarImage src={user?.avatar} />
-                                <AvatarFallback className="bg-white/20 text-white">
+                                <AvatarFallback className="bg-white/20 text-white text-sm">
                                     {getInitials()}
                                 </AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
-                                <p className="font-medium truncate">
+                                <p className="font-medium truncate text-sm">
                                     {user?.firstName || user?.username || 'User'}
                                 </p>
-                                <p className="text-xs text-white/70 truncate">
+                                <p className="text-xs text-white/60 truncate">
                                     {user?.phone || user?.email || ''}
                                 </p>
                             </div>

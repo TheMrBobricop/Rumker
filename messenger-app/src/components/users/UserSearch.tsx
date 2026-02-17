@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -31,8 +31,20 @@ export function UserSearch({ onSelectUser, onAddFriend, className }: UserSearchP
     const [isLoading, setIsLoading] = useState(false);
     const [showResults, setShowResults] = useState(false);
     const [sendingRequest, setSendingRequest] = useState<string | null>(null);
-    
+    const containerRef = useRef<HTMLDivElement>(null);
+
     const debouncedQuery = useDebounce(query, 300);
+
+    // Close dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setShowResults(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const searchUsers = useCallback(async (searchQuery: string) => {
         if (!searchQuery || searchQuery.length < 2) {
@@ -96,7 +108,7 @@ export function UserSearch({ onSelectUser, onAddFriend, className }: UserSearchP
     };
 
     return (
-        <div className={cn('relative', className)}>
+        <div ref={containerRef} className={cn('relative', className)}>
             <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -106,8 +118,8 @@ export function UserSearch({ onSelectUser, onAddFriend, className }: UserSearchP
                         setShowResults(true);
                     }}
                     onFocus={() => setShowResults(true)}
-                    placeholder="Search users by username..."
-                    className="pl-9 h-10"
+                    placeholder="Поиск по имени..."
+                    className="pl-9 h-9 sm:h-10 text-sm"
                 />
             </div>
 
@@ -120,7 +132,7 @@ export function UserSearch({ onSelectUser, onAddFriend, className }: UserSearchP
                         </div>
                     ) : users.length === 0 ? (
                         <div className="px-4 py-3 text-sm text-muted-foreground">
-                            {query.length >= 2 ? 'No users found' : 'Type at least 2 characters'}
+                            {query.length >= 2 ? 'Пользователи не найдены' : 'Введите минимум 2 символа'}
                         </div>
                     ) : (
                         <div className="py-1">
