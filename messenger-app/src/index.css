@@ -217,6 +217,13 @@
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
 
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
   /* Telegram-style scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
@@ -248,6 +255,7 @@
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: var(--tg-text-secondary) transparent;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Telegram-style curved tails using SVG paths */
@@ -372,6 +380,17 @@
     }
   }
 
+  @keyframes media-zoom-in {
+    from {
+      opacity: 0;
+      transform: scale(0.85);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
   @keyframes fade-scale-in {
     from {
       opacity: 0;
@@ -407,15 +426,15 @@
     animation: message-in 0.1s cubic-bezier(0.25, 0.1, 0.25, 1) both;
   }
 
-  /* Telegram-style send animation — slide up from bottom right */
+  /* Telegram-style send animation — smooth slide up with bounce settle */
   @keyframes msg-send {
     0% {
       opacity: 0;
-      transform: translateY(20px) scale(0.95);
+      transform: translateY(16px) scale(0.97);
     }
-    60% {
+    70% {
       opacity: 1;
-      transform: translateY(-2px) scale(1.01);
+      transform: translateY(-2px) scale(1.005);
     }
     100% {
       opacity: 1;
@@ -424,7 +443,7 @@
   }
 
   .animate-msg-send {
-    animation: msg-send 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: msg-send 250ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
   }
 
   /* Scroll-to-bottom button appear */
@@ -467,5 +486,1271 @@
 
   .animate-selection-pop {
     animation: selection-pop 0.12s ease-out both;
+  }
+
+  /* ========================================
+     Telegram-style UI Overhaul Animations
+     ======================================== */
+
+  /* Context menu spring pop */
+  @keyframes ctx-menu-in {
+    0% {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+    60% {
+      opacity: 1;
+      transform: scale(1.03);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes ctx-menu-out {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+  }
+
+  .animate-ctx-menu-in {
+    animation: ctx-menu-in 200ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    transform-origin: var(--ctx-origin, top left);
+  }
+
+  .animate-ctx-menu-out {
+    animation: ctx-menu-out 120ms ease-in both;
+    transform-origin: var(--ctx-origin, top left);
+  }
+
+  /* Mic ↔ Send button morph */
+  @keyframes btn-morph-in {
+    0% {
+      opacity: 0;
+      transform: rotate(-90deg) scale(0.5);
+    }
+    60% {
+      opacity: 1;
+      transform: rotate(8deg) scale(1.05);
+    }
+    100% {
+      opacity: 1;
+      transform: rotate(0deg) scale(1);
+    }
+  }
+
+  .animate-btn-morph {
+    animation: btn-morph-in 200ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  /* Recording dot breathing pulse */
+  @keyframes rec-pulse {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.4;
+      transform: scale(0.85);
+    }
+  }
+
+  .animate-rec-pulse {
+    animation: rec-pulse 1.5s ease-in-out infinite;
+  }
+
+  /* Reaction pop (bouncy) */
+  @keyframes reaction-pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.3);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.15);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .animate-reaction-pop {
+    animation: reaction-pop 250ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  /* Mobile panel slide transitions */
+  @keyframes slide-from-right {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slide-from-left {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  .animate-slide-from-right {
+    animation: slide-from-right 300ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  }
+
+  .animate-slide-from-left {
+    animation: slide-from-left 300ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  }
+
+  /* Message appear animation (improved) */
+  @keyframes msg-appear {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-msg-appear {
+    animation: msg-appear 150ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+
+  /* Badge bounce */
+  @keyframes badge-bounce {
+    0% {
+      transform: scale(0);
+    }
+    50% {
+      transform: scale(1.2);
+    }
+    70% {
+      transform: scale(0.9);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  .animate-badge-bounce {
+    animation: badge-bounce 300ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  /* Emoji picker slide up */
+  @keyframes picker-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .animate-picker-slide-up {
+    animation: picker-slide-up 150ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  }
+
+  /* Scroll button exit */
+  @keyframes fade-out {
+    from {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.8) translateY(8px);
+    }
+  }
+
+  .animate-fade-out {
+    animation: fade-out 200ms ease-in both;
+  }
+
+  /* Online pulse glow */
+  @keyframes online-pulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(72, 187, 120, 0.5);
+    }
+    50% {
+      box-shadow: 0 0 0 4px rgba(72, 187, 120, 0);
+    }
+  }
+
+  .animate-online-pulse {
+    animation: online-pulse 2s ease-in-out infinite;
+  }
+
+  /* Backdrop in */
+  @keyframes backdrop-in {
+    from {
+      opacity: 0;
+      backdrop-filter: blur(0px);
+    }
+    to {
+      opacity: 1;
+      backdrop-filter: blur(4px);
+    }
+  }
+
+  .animate-backdrop-in {
+    animation: backdrop-in 250ms ease-out both;
+  }
+
+  /* Tab indicator scale */
+  @keyframes tab-indicator {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  .animate-tab-indicator {
+    animation: tab-indicator 200ms ease-out both;
+  }
+
+  /* Incoming call ring pulse */
+  @keyframes call-ring-pulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6);
+      transform: scale(1);
+    }
+    50% {
+      box-shadow: 0 0 0 12px rgba(34, 197, 94, 0);
+      transform: scale(1.05);
+    }
+  }
+
+  /* Call participant slide in */
+  @keyframes call-participant-in {
+    from {
+      opacity: 0;
+      transform: translateX(-12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  /* Call card appear (fullscreen grid) */
+  @keyframes call-card-in {
+    0% {
+      opacity: 0;
+      transform: scale(0.9) translateY(16px);
+    }
+    60% {
+      opacity: 1;
+      transform: scale(1.02) translateY(-2px);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  /* Pin highlight ring */
+  @keyframes pin-highlight {
+    0% {
+      box-shadow: 0 0 0 0 rgba(74, 124, 89, 0.5);
+    }
+    50% {
+      box-shadow: 0 0 0 4px rgba(74, 124, 89, 0.3);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(74, 124, 89, 0);
+    }
+  }
+
+  .animate-pin-highlight {
+    animation: pin-highlight 2s ease-out both;
+  }
+
+  /* Pinned message bar cycling animations */
+  @keyframes slide-up-pin {
+    0% { transform: translateY(100%); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+
+  @keyframes slide-down-pin {
+    0% { transform: translateY(-100%); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+
+  .animate-slide-up-pin {
+    animation: slide-up-pin 200ms ease-out both;
+  }
+
+  .animate-slide-down-pin {
+    animation: slide-down-pin 200ms ease-out both;
+  }
+
+  /* Attachment menu slide-up */
+  @keyframes attachment-menu-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .animate-attachment-menu-in {
+    animation: attachment-menu-in 0.2s ease-out both;
+  }
+
+  /* Voice recording waveform bars */
+  @keyframes waveform {
+    from { transform: scaleY(0.4); }
+    to { transform: scaleY(1); }
+  }
+
+  /* ── Profile header avatar + name entrance ── */
+  @keyframes profile-header-in {
+    from {
+      opacity: 0;
+      transform: scale(0.92) translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  .animate-profile-header-in {
+    animation: profile-header-in 250ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+
+  /* ── Profile info list item slide-in (Telegram-style) ── */
+  @keyframes profile-item-in {
+    from {
+      opacity: 0;
+      transform: translateX(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .animate-profile-item-in {
+    animation: profile-item-in 200ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  }
+
+  /* ── Chat list item appear (staggered) ── */
+  @keyframes chat-item-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-chat-item-in {
+    animation: chat-item-in 180ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  }
+
+  /* ── Profile section slide (for switching between profile sections) ── */
+  @keyframes profile-section-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-profile-section-in {
+    animation: profile-section-in 200ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  }
+
+  /* ── Profile/group panel content fade-in ── */
+  @keyframes panel-content-in {
+    from {
+      opacity: 0;
+      transform: translateX(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .animate-panel-content-in {
+    animation: panel-content-in 200ms cubic-bezier(0.25, 0.1, 0.25, 1) 150ms both;
+  }
+
+  /* ── Incoming call ring wiggle ── */
+  @keyframes call-ring-wiggle {
+    0%, 100% { transform: rotate(0deg); }
+    10% { transform: rotate(-12deg); }
+    20% { transform: rotate(12deg); }
+    30% { transform: rotate(-8deg); }
+    40% { transform: rotate(8deg); }
+    50% { transform: rotate(0deg); }
+  }
+
+  .animate-call-ring {
+    animation: call-ring-pulse 1.5s ease-in-out infinite, call-ring-wiggle 0.8s ease-in-out infinite;
+  }
+
+  /* ── Call overlay expand-in ── */
+  @keyframes call-overlay-in {
+    0% {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .animate-call-overlay-in {
+    animation: call-overlay-in 350ms cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  /* ── Incoming call fullscreen slide up ── */
+  @keyframes incoming-call-slide-up {
+    0% {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-incoming-call-slide-up {
+    animation: incoming-call-slide-up 400ms cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  /* ── Incoming call avatar ring pulse (concentric) ── */
+  @keyframes incoming-ring-expand {
+    0% {
+      opacity: 0.6;
+      transform: scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.8);
+    }
+  }
+
+  .animate-incoming-ring-1 {
+    animation: incoming-ring-expand 2s ease-out infinite;
+  }
+  .animate-incoming-ring-2 {
+    animation: incoming-ring-expand 2s ease-out 0.6s infinite;
+  }
+  .animate-incoming-ring-3 {
+    animation: incoming-ring-expand 2s ease-out 1.2s infinite;
+  }
+
+  /* ── Accept button pulse glow ── */
+  @keyframes accept-btn-pulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);
+    }
+    50% {
+      box-shadow: 0 0 0 14px rgba(34, 197, 94, 0);
+    }
+  }
+
+  .animate-accept-pulse {
+    animation: accept-btn-pulse 2s ease-in-out infinite;
+  }
+
+  /* ── Voice channel join ── */
+  @keyframes vc-join-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .animate-vc-join {
+    animation: vc-join-in 250ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+
+  /* ── Theme color transition (toggled on <html> during theme switch) ── */
+  .theme-transitioning,
+  .theme-transitioning * {
+    transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease !important;
+  }
+
+  /* Utility classes */
+  .contain-content {
+    contain: content;
+  }
+
+  .contain-layout {
+    contain: layout;
+  }
+
+  .gpu-layer {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+  }
+
+  /* ════════════════════════════════════════════
+     Discord Voice UI — Exact Replica Styles
+     ════════════════════════════════════════════ */
+
+  /* ── Speaking ring (small — sidebar / overlay avatars) ── */
+  .dc-speaking-ring {
+    box-shadow: 0 0 0 2px #23a559;
+    border-radius: 9999px;
+    transition: box-shadow 0.2s ease;
+  }
+
+  /* ── Avatar outer ring (large — participant tiles) ── */
+  .dc-avatar-outer {
+    border-radius: 9999px;
+    padding: 3px;
+    border: 3px solid transparent;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  }
+  .dc-avatar-outer.dc-speaking {
+    border-color: #23a559;
+    animation: dc-speak-glow 2s ease-in-out infinite;
+  }
+
+  @keyframes dc-speak-glow {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(35, 165, 89, 0.3);
+    }
+    50% {
+      box-shadow: 0 0 16px 4px rgba(35, 165, 89, 0.15);
+    }
+  }
+
+  /* ── Mute/Deafen badge on participant avatar ── */
+  .dc-status-badge {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    height: 22px;
+    width: 22px;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #ed4245;
+    border: 3px solid #2b2d31;
+    z-index: 2;
+  }
+
+  /* ── Voice overlay button (mic / deafen / disconnect in bottom bar of sidebar) ── */
+  .dc-voice-btn {
+    height: 32px;
+    width: 32px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s ease;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+  }
+  .dc-voice-btn:hover {
+    background: #35373c;
+  }
+
+  /* ── Icon button (header, sidebar, generic) ── */
+  .dc-icon-btn {
+    height: 32px;
+    width: 32px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #949ba4;
+    transition: background-color 0.1s, color 0.1s;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .dc-icon-btn:hover {
+    background: rgba(255,255,255,0.1);
+    color: #dbdee1;
+  }
+  .dc-icon-btn[data-active="true"] {
+    background: #43444b;
+    color: #dbdee1;
+  }
+
+  /* ── Small icon button ── */
+  .dc-icon-btn-sm {
+    height: 24px;
+    width: 24px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #949ba4;
+    transition: background-color 0.1s, color 0.1s;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .dc-icon-btn-sm:hover {
+    background: rgba(255,255,255,0.1);
+    color: #dbdee1;
+  }
+
+  /* ── Bottom control bar button (React state hover) ── */
+  .dc-ctrl-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    min-width: 52px;
+    transition: transform 0.12s ease, filter 0.12s ease, background-color 0.15s ease;
+    user-select: none;
+  }
+  @media (min-width: 640px) {
+    .dc-ctrl-btn {
+      padding: 8px 16px;
+      min-width: 62px;
+    }
+  }
+  .dc-ctrl-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.12);
+  }
+  .dc-ctrl-btn:active {
+    transform: translateY(0) scale(0.96);
+    transition-duration: 0.05s;
+  }
+
+  .dc-ctrl-label {
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.1;
+    color: #949ba4;
+    transition: color 0.15s ease;
+  }
+
+  /* ── React state tooltip (rendered conditionally) ── */
+  .dc-tt {
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 12px;
+    border-radius: 5px;
+    background: #111214;
+    color: #e0e1e5;
+    pointer-events: none;
+    z-index: 100;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.25);
+    animation: dc-tt-in 0.1s ease-out both;
+  }
+  .dc-tt-arrow {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border: 5px solid transparent;
+    border-top-color: #111214;
+  }
+
+  @keyframes dc-tt-in {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+
+  /* ── Overlay tooltip (CSS-only, for voice bar) ── */
+  .dc-voice-btn .dc-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%) scale(0.92);
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 12px;
+    border-radius: 5px;
+    background: #111214;
+    color: #e0e1e5;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 100;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.25);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+  }
+  .dc-voice-btn:hover .dc-tooltip {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+
+  /* ── Participant tile (wider, Discord-accurate) ── */
+  .dc-ptile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 12px 12px;
+    width: 120px;
+    border-radius: 8px;
+    background: #2b2d31;
+    cursor: default;
+    transition: background-color 0.1s, transform 0.1s, box-shadow 0.1s;
+  }
+  @media (min-width: 640px) {
+    .dc-ptile {
+      width: 152px;
+      padding: 20px 16px 14px;
+    }
+  }
+  .dc-ptile:hover {
+    background: #383a40;
+    transform: scale(1.02);
+  }
+
+  .dc-ptile-name {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.2;
+    text-align: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 10px;
+    transition: color 0.15s ease;
+  }
+
+  @keyframes dc-tile-in {
+    from {
+      opacity: 0;
+      transform: scale(0.88) translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  /* ── Video tile (clickable, show expand on hover) ── */
+  .dc-video-tile {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .dc-video-tile:hover {
+    transform: scale(1.01);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  }
+  .dc-video-tile:hover .dc-video-tile-btn {
+    opacity: 1 !important;
+  }
+
+  /* ── Right sidebar ── */
+  .dc-right-sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    animation: dc-sidebar-in 0.2s cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  @media (min-width: 1024px) {
+    .dc-right-sidebar {
+      width: 260px;
+    }
+  }
+
+  .dc-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    flex-shrink: 0;
+  }
+
+  @keyframes dc-sidebar-in {
+    from {
+      opacity: 0;
+      width: 0;
+      min-width: 0;
+    }
+    to {
+      opacity: 1;
+      width: 240px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    @keyframes dc-sidebar-in {
+      to { width: 260px; }
+    }
+  }
+
+  /* ── Voice content area ── */
+  .dc-voice-content {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Chat message hover ── */
+  .dc-chat-msg {
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: background-color 0.1s ease;
+  }
+  .dc-chat-msg:hover {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  /* ── Stream notification bar ── */
+  .dc-stream-notify {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    animation: fade-slide-in 0.2s ease-out both;
+  }
+
+  /* ── Watch button (inside stream notify or on tile) ── */
+  .dc-watch-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    color: #fff;
+    background: #23a559;
+    cursor: pointer;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+    flex-shrink: 0;
+  }
+  .dc-watch-btn:hover {
+    background: #1a8f4a;
+    transform: scale(1.03);
+  }
+  .dc-watch-btn:active {
+    transform: scale(0.97);
+  }
+
+  /* ── LIVE badge on participant tile ── */
+  .dc-live-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #ed4245;
+    margin-bottom: 4px;
+    animation: dc-live-pulse 2s ease-in-out infinite;
+  }
+
+  .dc-live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: #ed4245;
+    animation: dc-live-dot-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes dc-live-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  @keyframes dc-live-dot-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(0.6); opacity: 0.5; }
+  }
+
+  /* ── Stream tab (when watching multiple streams) ── */
+  .dc-stream-tab {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #949ba4;
+    background: #2b2d31;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+  .dc-stream-tab:hover {
+    background: #383a40;
+    color: #dbdee1;
+  }
+  .dc-stream-tab-active,
+  .dc-stream-tab-active:hover {
+    background: #5865f2;
+    color: #fff;
+  }
+
+  /* ── Tile watch button (small, under participant tile name) ── */
+  .dc-tile-watch-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+    background: #23a559;
+    cursor: pointer;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+  }
+  .dc-tile-watch-btn:hover {
+    background: #1a8f4a;
+    transform: scale(1.05);
+  }
+  .dc-tile-watch-btn:active {
+    transform: scale(0.95);
+  }
+
+  /* ── Disconnect dropdown menu ── */
+  .dc-disconnect-menu {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    min-width: 200px;
+    border-radius: 8px;
+    padding: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 50;
+    animation: dc-menu-in 0.12s ease-out both;
+  }
+
+  @keyframes dc-menu-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .dc-disconnect-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #dbdee1;
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+  }
+  .dc-disconnect-item:hover {
+    background: #383a40;
+  }
+
+  .dc-disconnect-danger {
+    color: #ed4245;
+  }
+  .dc-disconnect-danger:hover {
+    background: rgba(237, 66, 69, 0.12);
+  }
+
+  /* ── PiP (Picture-in-Picture) floating window ── */
+  .dc-pip {
+    position: fixed;
+    z-index: 9999;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    transition: box-shadow 0.2s ease;
+    cursor: grab;
+    user-select: none;
+  }
+  .dc-pip:active {
+    cursor: grabbing;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  }
+  .dc-pip:hover .dc-pip-controls {
+    opacity: 1;
+  }
+
+  .dc-pip-controls {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  .dc-pip-btn {
+    height: 36px;
+    width: 36px;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.1s ease, background-color 0.15s ease;
+    backdrop-filter: blur(4px);
+  }
+  .dc-pip-btn:hover {
+    transform: scale(1.1);
+  }
+  .dc-pip-btn:active {
+    transform: scale(0.95);
+  }
+
+  .dc-pip-name {
+    position: absolute;
+    bottom: 6px;
+    left: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    pointer-events: none;
+    backdrop-filter: blur(4px);
+  }
+
+  @keyframes dc-pip-in {
+    from {
+      opacity: 0;
+      transform: scale(0.8) translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  .animate-dc-pip-in {
+    animation: dc-pip-in 0.25s cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  /* ── Join/Leave participant animations ── */
+  @keyframes dc-participant-join {
+    from { opacity: 0; transform: translateY(8px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes dc-participant-leave {
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to { opacity: 0; transform: translateY(-8px) scale(0.9); }
+  }
+  .dc-anim-join {
+    animation: dc-participant-join 0.3s ease-out both;
+  }
+  .dc-anim-leave {
+    animation: dc-participant-leave 0.3s ease-out both;
+    pointer-events: none;
+  }
+
+  /* ── Context menu (Discord-accurate) ── */
+  .dc-ctx-menu {
+    animation: dc-ctx-in 0.15s ease-out both;
+  }
+  @keyframes dc-ctx-in {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .dc-ctx-item:hover {
+    background: #5865f2;
+    color: #fff !important;
+  }
+  .dc-ctx-item:hover svg {
+    color: #fff !important;
+  }
+
+  /* ── Volume slider (Discord-style) ── */
+  .dc-volume-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: #4e5058;
+    outline: none;
+    cursor: pointer;
+  }
+  .dc-volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #5865f2;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 0 2px rgba(0,0,0,.3);
+    transition: transform 0.1s;
+  }
+  .dc-volume-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+  }
+  .dc-volume-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #5865f2;
+    cursor: pointer;
+    border: 2px solid #fff;
+  }
+
+  /* ── Spotlight/Grid view mode ── */
+  .dc-spotlight-main {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    padding: 12px;
+  }
+  .dc-spotlight-strip {
+    height: 100px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+  .dc-spotlight-strip::-webkit-scrollbar {
+    height: 4px;
+  }
+  .dc-spotlight-strip::-webkit-scrollbar-thumb {
+    background: #4e5058;
+    border-radius: 2px;
+  }
+  .dc-spotlight-mini {
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: outline 0.15s, transform 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #2b2d31;
+  }
+  .dc-spotlight-mini:hover {
+    transform: scale(1.05);
+  }
+  .dc-spotlight-mini.dc-spotlight-active {
+    outline: 2px solid #5865f2;
+    outline-offset: 2px;
+  }
+
+  /* ── Drag-and-drop (dnd-kit) ── */
+  .dc-dnd-dragging {
+    opacity: 0.5;
+    box-shadow: 0 4px 16px rgba(0,0,0,.3);
+  }
+  .dc-dnd-overlay {
+    background: #35373c;
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.4);
+  }
+  .dc-dnd-indicator {
+    height: 2px;
+    background: #5865f2;
+    border-radius: 1px;
+    margin: -1px 8px;
+  }
+  .dc-dnd-handle {
+    opacity: 0;
+    cursor: grab;
+    transition: opacity 0.1s;
+    color: #4e5058;
+  }
+  .dc-dnd-handle:active {
+    cursor: grabbing;
+  }
+  *:hover > .dc-dnd-handle {
+    opacity: 1;
+  }
+}
+
+  /* ═══ Chat messages container — smooth opacity transition ═══ */
+  .chat-messages-container {
+    transition: opacity 80ms ease-out;
+  }
+
+  /* GPU-accelerate message bubble tails */
+  .message-bubble-tail-out,
+  .message-bubble-tail-in {
+    will-change: transform;
+    transform: translateZ(0);
+  }
+
+  /* Layout containment for message rows — does not interfere with virtualizer measurement */
+  .chat-message-row {
+    contain: layout style;
+  }
+
+/* Accessibility: reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

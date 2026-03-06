@@ -6,17 +6,23 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { Settings, Moon, Sun, Users, HelpCircle, Menu, LogOut } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
-export function MainMenu() {
+interface MainMenuProps {
+    onOpenContacts?: () => void;
+}
+
+export function MainMenu({ onOpenContacts }: MainMenuProps) {
     const navigate = useNavigate();
-    const { user } = useAuthStore();
-    const { appearance, setTheme } = useSettingsStore();
+    const user = useAuthStore((s) => s.user);
+    const appearance = useSettingsStore((s) => s.appearance);
+    const setTheme = useSettingsStore((s) => s.setTheme);
     const [open, setOpen] = useState(false);
 
     const menuItems = [
-        { icon: Users, label: 'Contacts', onClick: () => { /* TODO */ } },
-        { icon: Settings, label: 'Settings', onClick: () => { navigate('/settings'); setOpen(false); } },
+        { icon: Users, label: 'Контакты', onClick: () => { onOpenContacts?.(); setOpen(false); } },
+        { icon: Settings, label: 'Настройки', onClick: () => { navigate('/settings'); setOpen(false); } },
     ];
 
     const toggleTheme = () => {
@@ -91,13 +97,19 @@ export function MainMenu() {
                                 <Moon className="h-5 w-5 text-tg-text-secondary" />
                             )}
                             <span className="text-sm">
-                                {appearance.theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                                {appearance.theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
                             </span>
                         </button>
 
-                        <button className="w-full flex items-center gap-4 px-4 py-3 text-left hover:bg-muted transition-colors">
+                        <button
+                            onClick={() => {
+                                toast.info('Rumker Messenger v1.0\n\nДля помощи обратитесь к разработчику.');
+                                setOpen(false);
+                            }}
+                            className="w-full flex items-center gap-4 px-4 py-3 text-left hover:bg-muted transition-colors"
+                        >
                             <HelpCircle className="h-5 w-5 text-tg-text-secondary" />
-                            <span className="text-sm">Help</span>
+                            <span className="text-sm">Помощь</span>
                         </button>
                     </nav>
 
@@ -109,7 +121,7 @@ export function MainMenu() {
                             onClick={() => useAuthStore.getState().logout()}
                         >
                             <LogOut className="h-5 w-5" />
-                            <span>Logout</span>
+                            <span>Выйти</span>
                         </Button>
                     </div>
                 </div>

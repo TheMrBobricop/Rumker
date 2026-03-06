@@ -25,7 +25,7 @@ interface UserSearchProps {
 }
 
 export function UserSearch({ onSelectUser, onAddFriend, className }: UserSearchProps) {
-    const { token } = useAuthStore();
+    const token = useAuthStore((s) => s.token);
     const [query, setQuery] = useState('');
     const [users, setUsers] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -137,10 +137,10 @@ export function UserSearch({ onSelectUser, onAddFriend, className }: UserSearchP
                     ) : (
                         <div className="py-1">
                             {users.map((user) => (
-                                <button
+                                <div
                                     key={user.id}
+                                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-muted transition-colors text-left cursor-pointer"
                                     onClick={() => handleSelect(user)}
-                                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-muted transition-colors text-left"
                                 >
                                     <Avatar className="h-10 w-10">
                                         <AvatarImage src={user.avatar} />
@@ -163,7 +163,7 @@ export function UserSearch({ onSelectUser, onAddFriend, className }: UserSearchP
                                         onClick={(e) => handleAddFriend(user, e)}
                                         disabled={sendingRequest === user.id}
                                         className="p-1 hover:bg-tg-primary/10 rounded-full transition-colors"
-                                        title="Add friend"
+                                        title="Добавить в друзья"
                                     >
                                         {sendingRequest === user.id ? (
                                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -171,7 +171,7 @@ export function UserSearch({ onSelectUser, onAddFriend, className }: UserSearchP
                                             <UserPlus className="h-4 w-4 text-tg-primary" />
                                         )}
                                     </button>
-                                </button>
+                                </div>
                             ))}
                         </div>
                     )}

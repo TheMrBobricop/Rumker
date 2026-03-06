@@ -1,6 +1,13 @@
 import { Router } from 'express';
+import type { Application } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
+import { validateBody, validateUuidParam, friendRequestSchema } from '../lib/validation.js';
+import { friendRequestLimiter, isValidUUID } from '../lib/security.js';
+
+function getIO(req: AuthRequest) {
+    return (req.app as Application).get('io');
+}
 
 const router = Router();
 
@@ -101,7 +108,7 @@ router.get('/requests', authenticateToken, async (req: AuthRequest, res) => {
 });
 
 // Send friend request
-router.post('/request', authenticateToken, async (req: AuthRequest, res) => {
+router.post('/request', authenticateToken, friendRequestLimiter, validateBody(friendRequestSchema), async (req: AuthRequest, res) => {
     try {
         const senderId = req.user?.userId;
         const { username, message } = req.body;
@@ -166,16 +173,26 @@ router.post('/request', authenticateToken, async (req: AuthRequest, res) => {
             return res.status(500).json({ error: 'Failed to send friend request' });
         }
 
+        const requestData = {
+            id: created.id,
+            senderId: created.sender_id,
+            receiverId: created.receiver_id,
+            status: created.status,
+            sender: formatUser(created.sender),
+            receiver: formatUser(created.receiver),
+        };
+
+        // Emit real-time event to receiver
+        try {
+            const io = getIO(req);
+            if (io) {
+                io.to(`user:${receiver.id}`).emit('friend:request', requestData);
+            }
+        } catch { /* socket not available */ }
+
         res.status(201).json({
             message: 'Friend request sent successfully',
-            request: {
-                id: created.id,
-                senderId: created.sender_id,
-                receiverId: created.receiver_id,
-                status: created.status,
-                sender: formatUser(created.sender),
-                receiver: formatUser(created.receiver),
-            },
+            request: requestData,
         });
     } catch (error) {
         console.error('Send friend request error:', error);
@@ -213,18 +230,26 @@ router.post('/accept/:requestId', authenticateToken, async (req: AuthRequest, re
             return res.status(500).json({ error: 'Failed to accept friend request' });
         }
 
-        // Add to contacts
-        await supabase.from('contacts').insert([
-            { user_id: request.sender_id, contact_id: userId },
-            { user_id: userId, contact_id: request.sender_id },
+        // Add to contacts + fetch both users in parallel
+        const [, { data: sender }, { data: accepter }] = await Promise.all([
+            supabase.from('contacts').insert([
+                { user_id: request.sender_id, contact_id: userId },
+                { user_id: userId, contact_id: request.sender_id },
+            ]),
+            supabase.from('users').select('id, username, first_name, last_name, avatar, is_online, last_seen').eq('id', request.sender_id).single(),
+            supabase.from('users').select('id, username, first_name, last_name, avatar').eq('id', userId).single(),
         ]);
 
-        // Get sender info for response
-        const { data: sender } = await supabase
-            .from('users')
-            .select('id, username, first_name, last_name, avatar, is_online, last_seen')
-            .eq('id', request.sender_id)
-            .single();
+        // Emit real-time event to the original sender
+        try {
+            const io = getIO(req);
+            if (io) {
+                io.to(`user:${request.sender_id}`).emit('friend:accepted', {
+                    requestId: request.id,
+                    friend: accepter ? formatUser(accepter) : null,
+                });
+            }
+        } catch { /* socket not available */ }
 
         res.json({
             message: 'Friend request accepted',
@@ -244,7 +269,7 @@ router.post('/reject/:requestId', authenticateToken, async (req: AuthRequest, re
 
         const { data: request, error: findError } = await supabase
             .from('friend_requests')
-            .select('id')
+            .select('id, sender_id')
             .eq('id', requestId)
             .eq('receiver_id', userId)
             .eq('status', 'pending')
@@ -258,6 +283,16 @@ router.post('/reject/:requestId', authenticateToken, async (req: AuthRequest, re
             .from('friend_requests')
             .update({ status: 'rejected' })
             .eq('id', requestId);
+
+        // Emit real-time event to the original sender
+        try {
+            const io = getIO(req);
+            if (io) {
+                io.to(`user:${request.sender_id}`).emit('friend:rejected', {
+                    requestId: request.id,
+                });
+            }
+        } catch { /* socket not available */ }
 
         res.json({ message: 'Friend request rejected' });
     } catch (error) {
@@ -302,17 +337,15 @@ router.delete('/:friendId', authenticateToken, async (req: AuthRequest, res) => 
         const userId = req.user?.userId;
         const { friendId } = req.params;
 
-        // Delete friend request
-        await supabase
-            .from('friend_requests')
-            .delete()
-            .or(`and(sender_id.eq.${userId},receiver_id.eq.${friendId},status.eq.accepted),and(sender_id.eq.${friendId},receiver_id.eq.${userId},status.eq.accepted)`);
+        if (!isValidUUID(friendId)) {
+            return res.status(400).json({ error: 'Invalid friend ID' });
+        }
 
-        // Delete contacts
-        await supabase
-            .from('contacts')
-            .delete()
-            .or(`and(user_id.eq.${userId},contact_id.eq.${friendId}),and(user_id.eq.${friendId},contact_id.eq.${userId})`);
+        // Delete friend request + contacts in parallel
+        await Promise.all([
+            supabase.from('friend_requests').delete().or(`and(sender_id.eq.${userId},receiver_id.eq.${friendId},status.eq.accepted),and(sender_id.eq.${friendId},receiver_id.eq.${userId},status.eq.accepted)`),
+            supabase.from('contacts').delete().or(`and(user_id.eq.${userId},contact_id.eq.${friendId}),and(user_id.eq.${friendId},contact_id.eq.${userId})`),
+        ]);
 
         res.json({ message: 'Friend removed successfully' });
     } catch (error) {

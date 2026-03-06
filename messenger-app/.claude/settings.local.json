@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:\\\\Users\\\\ASUS\\\\OneDrive\\\\Desktop\\\\Rumker\\\\messenger-app\" && npm run build 2>&1)",
+      "Bash(head:*)",
+      "Bash(grep:*)",
+      "Bash(tail:*)",
+      "Bash(ls:*)",
+      "Bash(cd \"C:/Users/ASUS/OneDrive/Desktop/Rumker/messenger-app\" && npm run build 2>&1)",
+      "Bash(node -e:*)",
+      "Bash(echo:*)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npm run build:*)",
+      "Bash(timeout 8 npm run dev:*)",
+      "Bash(netstat:*)",
+      "Bash(NODE_ENV=production npx tsx:*)",
+      "Bash(taskkill:*)"
+    ]
+  }
+}

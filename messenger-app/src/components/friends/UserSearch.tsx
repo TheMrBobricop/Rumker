@@ -24,7 +24,7 @@ interface UserSearchProps {
 }
 
 export function UserSearch({ onAddFriend, className }: UserSearchProps) {
-    const { token } = useAuthStore();
+    const token = useAuthStore((s) => s.token);
     const [query, setQuery] = useState('');
     const [users, setUsers] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState(false);

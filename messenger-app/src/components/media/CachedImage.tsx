@@ -20,10 +20,7 @@ export function CachedImage({
     alt = 'Image',
     ...props
 }: CachedImageProps) {
-    // Хук загружает полный контент
     const { mediaUrl, isLoading, error } = useMediaUrl(src, fileId, 'image');
-
-    // Состояние отображения thumbnail (пока грузится полный)
     const [showThumbnail, setShowThumbnail] = useState(true);
 
     useEffect(() => {
@@ -46,7 +43,7 @@ export function CachedImage({
         <div className={cn('relative overflow-hidden bg-muted', className)}>
             {/* Skeleton / Loading */}
             {isLoading && !thumbnailUrl && (
-                <Skeleton className="absolute inset-0 h-full w-full" />
+                <Skeleton className="h-48 w-full" />
             )}
 
             {/* Thumbnail (Blur effect) */}
@@ -58,13 +55,13 @@ export function CachedImage({
                 />
             )}
 
-            {/* Full Image */}
+            {/* Full Image — use natural sizing constrained by parent */}
             {mediaUrl && (
                 <img
                     src={mediaUrl}
                     alt={alt}
                     className={cn(
-                        'h-full w-full transition-opacity duration-300',
+                        'block max-w-full h-auto transition-opacity duration-300',
                         showThumbnail ? 'opacity-0' : 'opacity-100'
                     )}
                     {...props}

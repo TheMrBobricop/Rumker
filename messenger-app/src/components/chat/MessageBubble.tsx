@@ -1,12 +1,18 @@
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, memo } from 'react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { Check, CheckCheck, Edit2, Play, Pause, Clock, AlertCircle } from 'lucide-react';
+import { Check, CheckCheck, Edit2, Clock, AlertCircle, Forward } from 'lucide-react';
 import type { Message } from '@/types';
 import { CachedImage } from '@/components/media/CachedImage';
 import { MediaViewer, type MediaItem } from '@/components/media/MediaViewer';
+import { WaveformPlayer } from '@/components/media/WaveformPlayer';
+import { VideoThumbnail } from '@/components/media/VideoThumbnail';
+import { PollBubble } from './PollBubble';
+import { LocationBubble } from './LocationBubble';
+import { ContactBubble } from './ContactBubble';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { getUserColor } from '@/lib/userColors';
 
 /** Parse message text into segments: plain text, fenced code blocks, inline code */
 function parseMessageContent(text: string): React.ReactNode[] {
@@ -47,6 +53,101 @@ function parseMessageContent(text: string): React.ReactNode[] {
     return parts;
 }
 
+/** Extract YouTube video ID from a URL */
+function extractYouTubeId(url: string): string | null {
+    const patterns = [
+        /(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
+        /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+    ];
+    for (const pattern of patterns) {
+        const m = url.match(pattern);
+        if (m) return m[1];
+    }
+    return null;
+}
+
+/** Parse @mentions in plain text */
+function parseMentions(text: string, keyOffset: number): React.ReactNode[] {
+    const parts: React.ReactNode[] = [];
+    const mentionRegex = /@(\w+)/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = mentionRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push(text.slice(lastIndex, match.index));
+        }
+        parts.push(
+            <span
+                key={`mention-${keyOffset}-${parts.length}`}
+                className="text-tg-primary font-medium bg-tg-primary/10 px-0.5 rounded cursor-pointer hover:bg-tg-primary/20"
+            >
+                @{match[1]}
+            </span>
+        );
+        lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+        parts.push(text.slice(lastIndex));
+    }
+
+    return parts;
+}
+
+/** Parse URLs in plain text into clickable links + YouTube embeds */
+function parseUrls(text: string, keyOffset: number): React.ReactNode[] {
+    const parts: React.ReactNode[] = [];
+    const urlRegex = /https?:\/\/[^\s<>"')\]]+/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = urlRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push(...parseMentions(text.slice(lastIndex, match.index), keyOffset + parts.length));
+        }
+
+        const url = match[0];
+        const ytId = extractYouTubeId(url);
+
+        parts.push(
+            <a
+                key={`url-${keyOffset}-${parts.length}`}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-tg-primary underline underline-offset-2 hover:brightness-110 break-all"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {url}
+            </a>
+        );
+
+        // YouTube embed
+        if (ytId) {
+            parts.push(
+                <div key={`yt-${keyOffset}-${parts.length}`} className="my-1.5 -mx-1 rounded-lg overflow-hidden">
+                    <iframe
+                        src={`https://www.youtube.com/embed/${ytId}`}
+                        className="w-full aspect-video rounded-lg"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        title="YouTube video"
+                    />
+                </div>
+            );
+        }
+
+        lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+        parts.push(...parseMentions(text.slice(lastIndex), keyOffset + parts.length));
+    }
+
+    return parts;
+}
+
 /** Parse inline `code` within a text segment */
 function parseInlineCode(text: string, keyOffset: number): React.ReactNode[] {
     const parts: React.ReactNode[] = [];
@@ -56,7 +157,7 @@ function parseInlineCode(text: string, keyOffset: number): React.ReactNode[] {
 
     while ((match = inlineRegex.exec(text)) !== null) {
         if (match.index > lastIndex) {
-            parts.push(text.slice(lastIndex, match.index));
+            parts.push(...parseUrls(text.slice(lastIndex, match.index), keyOffset + parts.length));
         }
         parts.push(
             <code
@@ -70,86 +171,10 @@ function parseInlineCode(text: string, keyOffset: number): React.ReactNode[] {
     }
 
     if (lastIndex < text.length) {
-        parts.push(text.slice(lastIndex));
+        parts.push(...parseUrls(text.slice(lastIndex), keyOffset + parts.length));
     }
 
     return parts;
-}
-
-function VoicePlayer({ src }: { src: string }) {
-    const audioRef = useRef<HTMLAudioElement>(null);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [duration, setDuration] = useState(0);
-    const [currentTime, setCurrentTime] = useState(0);
-
-    useEffect(() => {
-        const audio = audioRef.current;
-        if (!audio) return;
-        const onMeta = () => setDuration(audio.duration || 0);
-        const onTime = () => setCurrentTime(audio.currentTime);
-        const onEnd = () => { setIsPlaying(false); setCurrentTime(0); };
-        audio.addEventListener('loadedmetadata', onMeta);
-        audio.addEventListener('timeupdate', onTime);
-        audio.addEventListener('ended', onEnd);
-        return () => {
-            audio.removeEventListener('loadedmetadata', onMeta);
-            audio.removeEventListener('timeupdate', onTime);
-            audio.removeEventListener('ended', onEnd);
-        };
-    }, []);
-
-    const toggle = () => {
-        const audio = audioRef.current;
-        if (!audio) return;
-        if (isPlaying) {
-            audio.pause();
-        } else {
-            audio.play();
-        }
-        setIsPlaying(!isPlaying);
-    };
-
-    const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-        const audio = audioRef.current;
-        if (!audio || !duration) return;
-        const rect = e.currentTarget.getBoundingClientRect();
-        const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-        audio.currentTime = ratio * duration;
-    };
-
-    const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-
-    const fmt = (s: number) => {
-        const m = Math.floor(s / 60);
-        const sec = Math.floor(s % 60);
-        return `${m}:${sec.toString().padStart(2, '0')}`;
-    };
-
-    return (
-        <div className="flex items-center gap-2.5 min-w-[180px] w-full">
-            <audio ref={audioRef} src={src} preload="metadata" />
-            <button
-                onClick={toggle}
-                className="h-9 w-9 shrink-0 rounded-full bg-tg-primary text-white flex items-center justify-center hover:opacity-90 transition-opacity active:scale-95"
-            >
-                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
-            </button>
-            <div className="flex-1 flex flex-col gap-1 min-w-0">
-                <div
-                    className="h-1.5 rounded-full bg-black/10 dark:bg-white/15 cursor-pointer relative overflow-hidden"
-                    onClick={handleSeek}
-                >
-                    <div
-                        className="h-full rounded-full bg-tg-primary transition-[width] duration-100"
-                        style={{ width: `${progress}%` }}
-                    />
-                </div>
-                <span className="text-[10px] text-tg-text-secondary tabular-nums leading-none">
-                    {fmt(currentTime)} / {fmt(duration)}
-                </span>
-            </div>
-        </div>
-    );
 }
 
 interface MessageBubbleProps {
@@ -159,15 +184,23 @@ interface MessageBubbleProps {
     showSenderName?: boolean;
     onContextMenu?: (e: React.MouseEvent, message: Message) => void;
     onReactionClick?: (messageId: string, emoji: string) => void;
+    onDoubleClick?: (message: Message) => void;
+    onScrollToMessage?: (messageId: string) => void;
     /** All media items in this chat, for gallery navigation */
     mediaItems?: MediaItem[];
+    /** Custom admin title for sender */
+    senderTitle?: string;
+    /** Role of the sender (owner/admin/member) */
+    senderRole?: string;
 }
 
-export function MessageBubble({ message, isMe, showTail = true, showSenderName, onContextMenu, onReactionClick, mediaItems }: MessageBubbleProps) {
+export const MessageBubble = memo(function MessageBubble({ message, isMe, showTail = true, showSenderName, onContextMenu, onReactionClick, onDoubleClick, onScrollToMessage, mediaItems, senderTitle, senderRole: _senderRole }: MessageBubbleProps) {
     const [viewerOpen, setViewerOpen] = useState(false);
     const time = format(new Date(message.timestamp), 'HH:mm');
     const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const { appearance } = useSettingsStore();
+    const appearance = useSettingsStore((s) => s.appearance);
+    // Local profile override for sender name
+    const localOverride = useSettingsStore((s) => s.localProfileOverrides[message.senderId]);
 
     const handleTouchStart = useCallback((e: React.TouchEvent) => {
         longPressTimer.current = setTimeout(() => {
@@ -210,16 +243,21 @@ export function MessageBubble({ message, isMe, showTail = true, showSenderName, 
     const hasMedia = (message.type === 'image' || message.type === 'video') && message.mediaUrl;
     const isVoice = message.type === 'voice' && message.mediaUrl;
     const isSticker = message.type === 'sticker';
+    const isGif = message.type === 'image' && message.mediaUrl && (
+        message.mediaUrl.includes('tenor.com') ||
+        message.mediaUrl.includes('.gif') ||
+        message.mediaUrl.includes('giphy.com')
+    );
 
     return (
-        <div className={cn("flex flex-col max-w-[85%] sm:max-w-[75%] md:max-w-[65%]", isMe ? "items-end" : "items-start")}>
+        <div className={cn("flex flex-col min-w-0 max-w-[85%] sm:max-w-[75%] md:max-w-[55%]", isMe ? "items-end" : "items-start")}>
             <div
                 className={cn(
-                    'group relative min-w-[60px] shadow-sm leading-relaxed transition-all duration-200 hover:brightness-[0.97]',
+                    'group relative min-w-[60px] shadow-sm leading-[1.3] transition-[colors,shadow,transform] duration-150 hover:shadow-md active:scale-[0.99] overflow-hidden',
                     tailClass,
                     showTail ? 'mb-0.5' : 'mb-px',
                     isSticker ? 'bg-transparent shadow-none p-0'
-                        : compactMode ? 'px-2 py-1' : 'px-2.5 py-1.5'
+                        : compactMode ? 'px-2 py-[4px]' : 'px-[8px] py-[5px]'
                 )}
                 style={{
                     borderRadius: isSticker ? undefined : `var(--message-border-radius, 12px)`,
@@ -234,74 +272,110 @@ export function MessageBubble({ message, isMe, showTail = true, showSenderName, 
                         onContextMenu(e, message);
                     }
                 }}
+                onDoubleClick={(e) => {
+                    if (onDoubleClick) {
+                        e.preventDefault();
+                        onDoubleClick(message);
+                    }
+                }}
                 onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
                 onTouchMove={handleTouchEnd}
             >
                 <div className="flex flex-col">
-                    {/* Sender name in group chats */}
+                    {/* Sender name + custom title in group chats */}
                     {showSenderName && (
-                        <div className="text-xs font-medium text-tg-primary mb-0.5 leading-tight">
-                            {message.sender?.firstName || message.sender?.username || 'User'}
+                        <div className="flex items-center gap-1.5 mb-0.5 leading-tight">
+                            <span className="text-xs font-medium" style={{ color: getUserColor(message.senderId) }}>
+                                {localOverride?.nickname || message.sender?.firstName || message.sender?.username || 'User'}
+                            </span>
+                            {senderTitle && (
+                                <span className="text-[10px] text-muted-foreground font-normal">{senderTitle}</span>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Forwarded From Header */}
+                    {message.forwardedFrom && (
+                        <div className="flex items-center gap-1.5 mb-1 text-xs" style={{ color: getUserColor(message.forwardedFrom.id || message.forwardedFrom.name) }}>
+                            <Forward className="h-3 w-3" />
+                            <span className="font-medium">Переслано от {message.forwardedFrom.name}</span>
                         </div>
                     )}
 
                     {/* Reply Context */}
-                    {message.replyToMessage && (
-                        <div className="mb-1 border-l-2 border-tg-primary pl-2 text-xs cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-r p-1">
-                            <div className="font-medium text-tg-primary leading-tight">
-                                {(message.replyToMessage as Message & { senderName?: string }).senderName || (message.replyToMessage.senderId === message.senderId ? 'Вы' : 'User')}
+                    {message.replyToMessage && (() => {
+                        const replyColor = getUserColor(message.replyToMessage.senderId);
+                        return (
+                            <div
+                                className="mb-1 border-l-2 pl-2 text-xs cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-r p-1 active:bg-black/10 dark:active:bg-white/10 transition-colors"
+                                style={{ borderLeftColor: replyColor }}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onScrollToMessage?.(message.replyToMessage!.id);
+                                }}
+                            >
+                                <div className="font-medium leading-tight" style={{ color: replyColor }}>
+                                    {(message.replyToMessage as Message & { senderName?: string }).senderName || (message.replyToMessage.senderId === message.senderId ? 'Вы' : 'User')}
+                                </div>
+                                <div className="truncate text-tg-text-secondary leading-tight">{message.replyToMessage.content}</div>
                             </div>
-                            <div className="truncate text-tg-text-secondary leading-tight">{message.replyToMessage.content}</div>
-                        </div>
-                    )}
+                        );
+                    })()}
 
-                    {/* Voice */}
+                    {/* Voice — WaveformPlayer */}
                     {isVoice && (
-                        <VoicePlayer src={message.mediaUrl!} />
+                        <WaveformPlayer src={message.mediaUrl!} messageId={message.id} isMe={isMe} />
                     )}
 
                     {/* Image */}
                     {message.type === 'image' && message.mediaUrl && (
                         <div
-                            className="-mx-2.5 -mt-1.5 mb-1 overflow-hidden rounded-t-[var(--message-border-radius,12px)] cursor-pointer first:rounded-t-[var(--message-border-radius,12px)]"
+                            className="relative -mx-[9px] -mt-[6px] mb-1 overflow-hidden cursor-pointer bg-black/5 dark:bg-white/5"
                             onClick={() => setViewerOpen(true)}
                         >
                             <CachedImage
                                 src={message.mediaUrl}
                                 fileId={message.id}
                                 alt="Media"
-                                className="max-h-[300px] w-full object-contain"
+                                style={{ maxHeight: 'min(400px, 70vh)', maxWidth: '100%', display: 'block', margin: '0 auto' }}
                             />
-                        </div>
-                    )}
-
-                    {/* Video */}
-                    {message.type === 'video' && message.mediaUrl && (
-                        <div
-                            className="-mx-2.5 -mt-1.5 mb-1 overflow-hidden rounded-t-[var(--message-border-radius,12px)] cursor-pointer relative bg-black min-h-[120px]"
-                            onClick={() => setViewerOpen(true)}
-                        >
-                            <video
-                                src={message.mediaUrl}
-                                className="max-h-[300px] w-full object-contain bg-black"
-                                preload="metadata"
-                                onClick={(e) => e.stopPropagation()}
-                                style={{ pointerEvents: 'none' }}
-                            />
-                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 hover:bg-black/10 transition-colors">
-                                <div className="bg-black/50 rounded-full p-3 backdrop-blur-sm">
-                                    <Play className="h-6 w-6 text-white fill-white" />
+                            {isGif && (
+                                <div className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                                    GIF
                                 </div>
-                            </div>
+                            )}
                         </div>
                     )}
 
-                    {/* Text */}
-                    {!isSticker && message.content && (
+                    {/* Video — VideoThumbnail */}
+                    {message.type === 'video' && message.mediaUrl && (
+                        <VideoThumbnail
+                            src={message.mediaUrl}
+                            onOpenViewer={() => setViewerOpen(true)}
+                        />
+                    )}
+
+                    {/* Poll */}
+                    {message.type === 'poll' && message.pollData && (
+                        <PollBubble pollData={message.pollData} isMe={isMe} />
+                    )}
+
+                    {/* Location */}
+                    {message.type === 'location' && message.locationData && (
+                        <LocationBubble locationData={message.locationData} />
+                    )}
+
+                    {/* Contact */}
+                    {message.type === 'contact' && message.contactData && (
+                        <ContactBubble contactData={message.contactData} />
+                    )}
+
+                    {/* Text content with spacer for time */}
+                    {!isSticker && message.type !== 'poll' && message.type !== 'location' && message.type !== 'contact' && message.content && (
                         <div className="whitespace-pre-wrap break-words select-text cursor-text">
                             {parseMessageContent(message.content)}
-                            {showTimeStamps && <span className="inline-block w-[68px]" />}
+                            {showTimeStamps && <span className="inline-block w-[58px]" />}
                         </div>
                     )}
 
@@ -309,20 +383,54 @@ export function MessageBubble({ message, isMe, showTail = true, showSenderName, 
                     {isSticker && message.mediaUrl && (
                         <img src={message.mediaUrl} alt="Sticker" className="h-32 w-32 object-contain" />
                     )}
+
+                    {/* Sticker — emoji-only (no mediaUrl) */}
+                    {isSticker && !message.mediaUrl && message.content && (
+                        <span className="text-7xl leading-none">{message.content}</span>
+                    )}
                 </div>
 
-                {/* Meta: Time & Status */}
-                {showTimeStamps && (
+                {/* Absolute time overlay for text messages (Telegram-style bottom-right) */}
+                {showTimeStamps && !isSticker && message.content && message.type !== 'poll' && message.type !== 'location' && message.type !== 'contact' && (
+                    <span
+                        className="absolute bottom-[5px] right-[8px] flex items-center gap-1 text-[11px] select-none leading-none whitespace-nowrap pointer-events-none"
+                        style={{ color: isMe ? undefined : 'var(--tg-text-secondary)' }}
+                    >
+                        {message.isEdited && <Edit2 className={cn("h-3 w-3", isMe ? "opacity-[0.55]" : "opacity-70")} />}
+                        <span className={isMe ? "opacity-[0.55]" : ""}>{time}</span>
+                        {isMe && (
+                            <span className={cn(
+                                "transition-colors duration-300",
+                                message.status === 'read' ? 'text-tg-primary'
+                                    : message.status === 'error' ? 'text-red-500'
+                                    : 'opacity-[0.55]'
+                            )}>
+                                {message.status === 'sending' ? (
+                                    <Clock className="h-3 w-3 animate-pulse" />
+                                ) : message.status === 'error' ? (
+                                    <AlertCircle className="h-3 w-3" />
+                                ) : message.status === 'read' ? (
+                                    <CheckCheck className="h-3 w-3" />
+                                ) : (
+                                    <Check className="h-3 w-3" />
+                                )}
+                            </span>
+                        )}
+                    </span>
+                )}
+
+                {/* Time for non-text messages (media only, stickers, polls, etc.) */}
+                {showTimeStamps && (isSticker || !message.content || message.type === 'poll' || message.type === 'location' || message.type === 'contact') && (
                     <div className={cn(
                         "flex items-center gap-1 text-[11px] select-none leading-none",
                         isSticker && "bg-black/30 text-white rounded px-1 py-0.5 mt-1",
-                        !isSticker && message.content && "float-right relative -mt-4 ml-2 text-tg-text-secondary",
-                        !isSticker && !message.content && "flex justify-end mt-1 text-tg-text-secondary"
+                        !isSticker && "flex justify-end mt-0.5 text-tg-text-secondary"
                     )}>
                         {message.isEdited && <Edit2 className="h-3 w-3 opacity-70" />}
                         <span>{time}</span>
                         {isMe && !isSticker && (
                             <span className={cn(
+                                "transition-colors duration-300",
                                 message.status === 'read' ? 'text-tg-primary'
                                     : message.status === 'error' ? 'text-red-500'
                                     : 'text-tg-text-secondary'
@@ -345,11 +453,12 @@ export function MessageBubble({ message, isMe, showTail = true, showSenderName, 
             {/* Reaction Pills */}
             {message.reactions && message.reactions.length > 0 && (
                 <div className={cn("flex flex-wrap gap-1 mt-0.5", isMe ? "justify-end" : "justify-start")}>
-                    {message.reactions.map((reaction) => (
+                    {message.reactions.map((reaction, i) => (
                         <button
                             key={reaction.emoji}
                             onClick={() => onReactionClick?.(message.id, reaction.emoji)}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-xs transition-colors"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-xs transition-colors animate-reaction-pop"
+                            style={{ animationDelay: `${i * 30}ms` }}
                         >
                             <span>{reaction.emoji}</span>
                             <span className="text-tg-text-secondary">{reaction.userIds.length}</span>
@@ -372,4 +481,4 @@ export function MessageBubble({ message, isMe, showTail = true, showSenderName, 
             )}
         </div>
     );
-}
+});

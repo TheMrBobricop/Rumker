@@ -1,28 +1,23 @@
 import { Router } from 'express';
-import { z } from 'zod';
 import { telegramService } from '../services/telegram.js';
-import { generateToken, generateRefreshToken } from '../middleware/auth.js';
+import { generateToken, generateRefreshToken, verifyRefreshToken, authenticateToken, type AuthRequest } from '../middleware/auth.js';
 import { supabase } from '../lib/supabase.js';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+
+/** Hash a refresh token with SHA-256 for secure storage */
+function hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
+}
+import { registerSchema, loginEmailSchema, sendCodeSchema, signInSchema, checkPasswordSchema, validateBody } from '../lib/validation.js';
+import { loginLimiter, registerLimiter, refreshLimiter, telegramAuthLimiter } from '../lib/security.js';
 
 const router = Router();
 
-// Валидация входных данных
-const sendCodeSchema = z.object({
-    phoneNumber: z.string().min(5),
-});
-
-const signInSchema = z.object({
-    phoneNumber: z.string().min(5),
-    phoneCodeHash: z.string().min(1),
-    phoneCode: z.string().min(1),
-    password: z.string().optional(), // 2FA пароль (если есть)
-});
-
 // 1. Отправка кода
-router.post('/telegram/send-code', async (req, res) => {
+router.post('/telegram/send-code', telegramAuthLimiter, validateBody(sendCodeSchema), async (req, res) => {
     try {
-        const { phoneNumber } = sendCodeSchema.parse(req.body);
+        const { phoneNumber } = req.body;
 
         // В реальном продакшене `userId` должен быть сессионным или временным идентификатором
         // Для простоты используем номер телефона как временный ID сессии
@@ -31,16 +26,17 @@ router.post('/telegram/send-code', async (req, res) => {
         const { phoneCodeHash } = await telegramService.sendCode(formattedPhone, phoneNumber);
 
         res.json({ phoneCodeHash });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Send Code Error:', error);
-        res.status(400).json({ error: error.message || 'Failed to send code' });
+        const errorMessage = error instanceof Error ? error.message : 'Failed to send code';
+        res.status(400).json({ error: errorMessage });
     }
 });
 
 // 2. Вход по коду
-router.post('/telegram/sign-in', async (req, res) => {
+router.post('/telegram/sign-in', telegramAuthLimiter, validateBody(signInSchema), async (req, res) => {
     try {
-        const { phoneNumber, phoneCodeHash, phoneCode, password } = signInSchema.parse(req.body);
+        const { phoneNumber, phoneCodeHash, phoneCode } = req.body;
         const formattedPhone = phoneNumber.replace(/\D/g, '');
 
         // Выполняем вход через gram.js
@@ -49,7 +45,7 @@ router.post('/telegram/sign-in', async (req, res) => {
 
         // Получаем инфо о пользователе через клиент
         const client = await telegramService.initializeClient(formattedPhone, sessionString);
-        const me = await client.getMe() as any; // any, так как типы gram.js иногда сложные
+        const me = await client.getMe() as unknown as { id: number; username?: string; firstName?: string; lastName?: string };
 
         if (!me) throw new Error('Failed to get user info');
 
@@ -57,7 +53,7 @@ router.post('/telegram/sign-in', async (req, res) => {
         const telegramId = me.id.toString();
         const { data: existingUser } = await supabase
             .from('users')
-            .select('*')
+            .select('id, username, first_name, last_name, telegram_session')
             .eq('telegram_id', telegramId)
             .single();
 
@@ -105,7 +101,7 @@ router.post('/telegram/sign-in', async (req, res) => {
             .from('sessions')
             .insert({
                 user_id: user.id,
-                token: refreshToken,
+                token_hash: hashToken(refreshToken),
                 expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
             });
 
@@ -113,12 +109,12 @@ router.post('/telegram/sign-in', async (req, res) => {
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
         res.json({
             accessToken,
-            refreshToken,
             user: {
                 id: user.id,
                 username: user.username,
@@ -127,48 +123,120 @@ router.post('/telegram/sign-in', async (req, res) => {
             }
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Sign In Error:', error);
-        if (error.errorMessage === 'SESSION_PASSWORD_NEEDED') {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to sign in';
+        const errorObj = error as { errorMessage?: string; message?: string };
+        if (errorObj.errorMessage === 'SESSION_PASSWORD_NEEDED') {
             return res.status(401).json({ error: '2FA_REQUIRED', message: 'Two-factor authentication is enabled' });
         }
-        res.status(400).json({ error: error.message || 'Failed to sign in' });
+        res.status(400).json({ error: errorMessage });
+    }
+});
+
+// 3. Проверка 2FA пароля
+router.post('/telegram/check-password', telegramAuthLimiter, validateBody(checkPasswordSchema), async (req, res) => {
+    try {
+        const { phoneNumber, password } = req.body;
+        const formattedPhone = phoneNumber.replace(/\D/g, '');
+
+        const { sessionString } = await telegramService.checkPassword(formattedPhone, password);
+
+        // Получаем инфо о пользователе
+        const client = await telegramService.initializeClient(formattedPhone, sessionString);
+        const me = await client.getMe() as unknown as { id: number; username?: string; firstName?: string; lastName?: string };
+
+        if (!me) throw new Error('Failed to get user info');
+
+        // Сохраняем/Обновляем пользователя в Supabase
+        const telegramId = me.id.toString();
+        const { data: existingUser } = await supabase
+            .from('users')
+            .select('id, username, first_name, last_name, telegram_session')
+            .eq('telegram_id', telegramId)
+            .single();
+
+        let user;
+        if (existingUser) {
+            const { data: updated } = await supabase
+                .from('users')
+                .update({
+                    username: me.username || existingUser.username,
+                    first_name: me.firstName,
+                    last_name: me.lastName,
+                    last_seen: new Date().toISOString(),
+                    telegram_session: sessionString,
+                })
+                .eq('id', existingUser.id)
+                .select()
+                .single();
+            user = updated || existingUser;
+        } else {
+            const { data: created, error: createErr } = await supabase
+                .from('users')
+                .insert({
+                    telegram_id: telegramId,
+                    username: me.username || `user${me.id}`,
+                    password: '',
+                    first_name: me.firstName,
+                    last_name: me.lastName,
+                    telegram_session: sessionString,
+                    is_telegram_linked: true,
+                })
+                .select()
+                .single();
+            if (createErr || !created) throw new Error('Failed to create user');
+            user = created;
+        }
+
+        const accessToken = generateToken({ userId: user.id, username: user.username });
+        const refreshToken = generateRefreshToken({ userId: user.id });
+
+        await supabase
+            .from('sessions')
+            .insert({
+                user_id: user.id,
+                token_hash: hashToken(refreshToken),
+                expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            });
+
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+
+        res.json({
+            accessToken,
+            user: {
+                id: user.id,
+                username: user.username,
+                firstName: user.first_name,
+                lastName: user.last_name,
+            }
+        });
+    } catch (error: unknown) {
+        console.error('Check Password Error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Неверный пароль';
+        res.status(400).json({ error: errorMessage });
     }
 });
 
 // --- Email Authentication ---
 
-const registerSchema = z.object({
-    username: z.string().min(3),
-    email: z.string().email(),
-    password: z.string().min(6),
-    confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords don't match",
-    path: ["confirmPassword"],
-});
-
-const loginEmailSchema = z.object({
-    email: z.string().email(),
-    password: z.string().min(1),
-});
-
 // Регистрация через Email
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, validateBody(registerSchema), async (req, res) => {
     try {
-        const { username, email, password } = registerSchema.parse(req.body);
+        const { username, email, password } = req.body;
 
-        // Проверяем существующего пользователя
-        const { data: existingUser, error: checkError } = await supabase
-            .from('users')
-            .select('*')
-            .or(`email.eq.${email},username.eq.${username}`)
-            .single();
+        // Проверяем существующего пользователя (parallel queries)
+        const [{ data: byEmail }, { data: byUsername }] = await Promise.all([
+            supabase.from('users').select('id').eq('email', email).limit(1).maybeSingle(),
+            supabase.from('users').select('id').eq('username', username).limit(1).maybeSingle(),
+        ]);
 
-        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
-            console.error('Check user error:', checkError);
-            return res.status(500).json({ error: 'Database error' });
-        }
+        const existingUser = byEmail || byUsername;
 
         if (existingUser) {
             return res.status(400).json({ error: 'User with this email or username already exists' });
@@ -204,7 +272,7 @@ router.post('/register', async (req, res) => {
             .from('sessions')
             .insert({
                 user_id: user.id,
-                token: refreshToken,
+                token_hash: hashToken(refreshToken),
                 expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
             });
 
@@ -215,12 +283,12 @@ router.post('/register', async (req, res) => {
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
         res.status(201).json({
             accessToken,
-            refreshToken,
             user: {
                 id: user.id,
                 username: user.username,
@@ -230,20 +298,21 @@ router.post('/register', async (req, res) => {
             }
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Registration Error:', error);
-        res.status(400).json({ error: error.message || 'Registration failed' });
+        const errorMessage = error instanceof Error ? error.message : 'Registration failed';
+        res.status(400).json({ error: errorMessage });
     }
 });
 
 // Вход через Email
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, validateBody(loginEmailSchema), async (req, res) => {
     try {
-        const { email, password } = loginEmailSchema.parse(req.body);
+        const { email, password } = req.body;
 
         const { data: user, error } = await supabase
             .from('users')
-            .select('*')
+            .select('id, username, email, password, first_name, last_name')
             .eq('email', email)
             .single();
             
@@ -265,7 +334,7 @@ router.post('/login', async (req, res) => {
             .from('sessions')
             .insert({
                 user_id: user.id,
-                token: refreshToken,
+                token_hash: hashToken(refreshToken),
                 expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
             });
 
@@ -276,12 +345,12 @@ router.post('/login', async (req, res) => {
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
         res.json({
             accessToken,
-            refreshToken,
             user: {
                 id: user.id,
                 username: user.username,
@@ -291,14 +360,81 @@ router.post('/login', async (req, res) => {
             }
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Login Error:', error);
-        res.status(400).json({ error: error.message || 'Login failed' });
+        const errorMessage = error instanceof Error ? error.message : 'Login failed';
+        res.status(400).json({ error: errorMessage });
+    }
+});
+
+// Get current user info (token check)
+router.get('/me', authenticateToken, async (req: AuthRequest, res) => {
+    try {
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('id, username, email, first_name, last_name, bio, avatar, phone, last_seen, is_online')
+            .eq('id', userId)
+            .single();
+
+        if (error || !user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json({
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            firstName: user.first_name,
+            lastName: user.last_name,
+            bio: user.bio,
+            avatar: user.avatar,
+            phone: user.phone,
+            lastSeen: user.last_seen,
+            isOnline: user.is_online,
+        });
+    } catch (error: unknown) {
+        console.error('Get me error:', error);
+        res.status(500).json({ error: 'Failed to get user info' });
+    }
+});
+
+// Logout — invalidate session and clear cookie
+router.post('/logout', authenticateToken, async (req: AuthRequest, res) => {
+    try {
+        const userId = req.user?.userId;
+        const refreshToken = req.cookies?.refreshToken;
+
+        if (refreshToken && userId) {
+            // Delete this specific session
+            await supabase
+                .from('sessions')
+                .delete()
+                .eq('token_hash', hashToken(refreshToken))
+                .eq('user_id', userId);
+        }
+
+        // Clear the refresh token cookie
+        res.clearCookie('refreshToken', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+        });
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Logout error:', error);
+        res.status(500).json({ error: 'Failed to logout' });
     }
 });
 
 // Обновление access token
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', refreshLimiter, async (req, res) => {
     try {
         // Берём refreshToken из cookie или из body
         const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
@@ -307,12 +443,10 @@ router.post('/refresh', async (req, res) => {
             return res.status(401).json({ error: 'Refresh token required' });
         }
 
-        // Verify refresh token
-        let payload: any;
+        // Verify refresh token with dedicated secret
+        let payload: { userId: string; username: string };
         try {
-            const jwt = await import('jsonwebtoken');
-            const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_key_change_in_production';
-            payload = jwt.default.verify(refreshToken, JWT_SECRET);
+            payload = await verifyRefreshToken(refreshToken) as { userId: string; username: string };
         } catch {
             return res.status(403).json({ error: 'Invalid refresh token' });
         }
@@ -320,8 +454,8 @@ router.post('/refresh', async (req, res) => {
         // Check session exists in DB
         const { data: session, error: sessionError } = await supabase
             .from('sessions')
-            .select('*')
-            .eq('token', refreshToken)
+            .select('id')
+            .eq('token_hash', hashToken(refreshToken))
             .eq('user_id', payload.userId)
             .single();
 
@@ -340,28 +474,13 @@ router.post('/refresh', async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // Generate new tokens
+        // Generate only a new access token — do NOT rotate the refresh token
+        // Rotating causes race conditions: if the response is lost, the client
+        // still holds the old token which no longer exists in DB → forced logout.
         const newAccessToken = generateToken({ userId: user.id, username: user.username });
-        const newRefreshToken = generateRefreshToken({ userId: user.id });
-
-        // Update session in DB
-        await supabase
-            .from('sessions')
-            .update({
-                token: newRefreshToken,
-                expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-            })
-            .eq('id', session.id);
-
-        res.cookie('refreshToken', newRefreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
 
         res.json({
             accessToken: newAccessToken,
-            refreshToken: newRefreshToken,
             user: {
                 id: user.id,
                 username: user.username,
@@ -370,7 +489,7 @@ router.post('/refresh', async (req, res) => {
                 lastName: user.last_name,
             }
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Refresh Error:', error);
         res.status(500).json({ error: 'Failed to refresh token' });
     }

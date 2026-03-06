@@ -4,7 +4,29 @@
       "Bash(npx vite build)",
       "Bash(npx eslint:*)",
       "Bash(npx tsc:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(git commit:*)",
+      "Bash(node -e:*)",
+      "Bash(curl:*)",
+      "Bash(xargs:*)",
+      "Bash(sort:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(powershell -Command \"Stop-Process -Id 21364 -Force\")",
+      "Bash(grep:*)",
+      "Bash(npx vitest run)",
+      "Bash(wc:*)",
+      "Bash(cmd.exe /c \"taskkill /PID 19580 /F\")",
+      "Bash(cmd.exe /c \"taskkill /PID 19580 /F 2>&1\")",
+      "Bash(echo:*)",
+      "Bash(powershell -Command \"Stop-Process -Id 19580 -Force; Start-Sleep 1; Set-Location ''C:/Users/ASUS/OneDrive/Desktop/Rumker/messenger-app''; node -e \"\"process.env.NODE_ENV=''production''\"\" & npm run start:win\")",
+      "Bash(powershell -Command \"Stop-Process -Id 19580 -Force -ErrorAction SilentlyContinue\")",
+      "Bash(npx vite build:*)",
+      "Bash(npm show:*)"
     ]
   }
 }

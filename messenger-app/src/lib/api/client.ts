@@ -48,18 +48,12 @@ class ApiClient {
         this.refreshPromise = (async () => {
             try {
                 const authStore = useAuthStore.getState();
-                const refreshToken = authStore.refreshToken;
 
-                if (!refreshToken) {
-                    authStore.logout();
-                    tokenStorage.setToken(null);
-                    return false;
-                }
-
+                // Refresh token передаётся только через httpOnly cookie (credentials: 'include')
+                // Не отправляем его в body — это уязвимость (XSS доступ к localStorage)
                 const response = await fetch(`${this.baseUrl}/auth/refresh`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ refreshToken }),
                     credentials: 'include',
                 });
 
@@ -71,12 +65,12 @@ class ApiClient {
                 }
 
                 const data = await response.json();
-                authStore.setTokens(data.accessToken, data.refreshToken);
+                authStore.setTokens(data.accessToken);
                 tokenStorage.setToken(data.accessToken);
                 return true;
-            } catch {
-                useAuthStore.getState().logout();
-                tokenStorage.setToken(null);
+            } catch (err) {
+                // Network error — do NOT logout, user might just be offline temporarily
+                console.warn('[ApiClient] Refresh failed (network?):', err);
                 return false;
             } finally {
                 this.refreshPromise = null;
@@ -91,6 +85,8 @@ class ApiClient {
 
         const url = `${this.baseUrl}${endpoint}`;
         const headers = this.getHeaders(customHeaders);
+
+        console.log('[ApiClient] Request:', method, url);
 
         const config: RequestInit = {
             method,

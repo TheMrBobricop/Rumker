@@ -5,7 +5,8 @@ import { Switch } from '@/components/ui/switch';
 import { Bell } from 'lucide-react';
 
 export function NotificationSettings() {
-    const { notifications, updateNotifications } = useSettingsStore();
+    const notifications = useSettingsStore((s) => s.notifications);
+    const updateNotifications = useSettingsStore((s) => s.updateNotifications);
 
     return (
         <Card>

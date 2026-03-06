@@ -1,8 +1,15 @@
 import { Router } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
+import { validateBody, updateProfileSchema } from '../lib/validation.js';
 
 const router = Router();
+
+// Sanitize a string for use inside PostgREST filter values.
+// Escapes characters that have special meaning in PostgREST syntax.
+function sanitizeFilterValue(val: string): string {
+    return val.replace(/[\\%_"',().*]/g, '');
+}
 
 // Search users by username
 router.get('/search', authenticateToken, async (req: AuthRequest, res) => {
@@ -25,8 +32,12 @@ router.get('/search', authenticateToken, async (req: AuthRequest, res) => {
             .limit(20);
 
         if (query) {
-            let q = query.toLowerCase();
+            let q = query.toLowerCase().trim();
             if (q.startsWith('@')) q = q.slice(1);
+            q = sanitizeFilterValue(q);
+            if (q.length === 0) {
+                return res.json({ users: [] });
+            }
             request = request.or(`username.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`);
         }
 
@@ -103,7 +114,51 @@ router.get('/id/:userId', authenticateToken, async (req: AuthRequest, res) => {
     }
 });
 
-// Get user by username
+// Get current user profile (MUST be before /:username to avoid matching "me" as username)
+router.get('/me/profile', authenticateToken, async (req: AuthRequest, res) => {
+    try {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select(`
+                id,
+                username,
+                email,
+                first_name,
+                last_name,
+                avatar,
+                bio,
+                phone,
+                is_online,
+                last_seen
+            `)
+            .eq('id', req.user?.userId)
+            .single();
+
+        if (error || !user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const formattedUser = {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            firstName: user.first_name,
+            lastName: user.last_name,
+            avatar: user.avatar,
+            bio: user.bio,
+            phone: user.phone,
+            isOnline: user.is_online,
+            lastSeen: user.last_seen
+        };
+
+        res.json({ user: formattedUser });
+    } catch (error) {
+        console.error('Get profile error:', error);
+        res.status(500).json({ error: 'Failed to get profile' });
+    }
+});
+
+// Get user by username (AFTER /me/profile to prevent "me" matching as username)
 router.get('/:username', authenticateToken, async (req: AuthRequest, res) => {
     try {
         const { username } = req.params;
@@ -148,52 +203,8 @@ router.get('/:username', authenticateToken, async (req: AuthRequest, res) => {
     }
 });
 
-// Get current user profile
-router.get('/me/profile', authenticateToken, async (req: AuthRequest, res) => {
-    try {
-        const { data: user, error } = await supabase
-            .from('users')
-            .select(`
-                id,
-                username,
-                email,
-                first_name,
-                last_name,
-                avatar,
-                bio,
-                phone,
-                is_online,
-                last_seen
-            `)
-            .eq('id', req.user?.userId)
-            .single();
-
-        if (error || !user) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        const formattedUser = {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            firstName: user.first_name,
-            lastName: user.last_name,
-            avatar: user.avatar,
-            bio: user.bio,
-            phone: user.phone,
-            isOnline: user.is_online,
-            lastSeen: user.last_seen
-        };
-
-        res.json({ user: formattedUser });
-    } catch (error) {
-        console.error('Get profile error:', error);
-        res.status(500).json({ error: 'Failed to get profile' });
-    }
-});
-
 // Update user profile
-router.patch('/me/profile', authenticateToken, async (req: AuthRequest, res) => {
+router.patch('/me/profile', authenticateToken, validateBody(updateProfileSchema), async (req: AuthRequest, res) => {
     try {
         const { firstName, lastName, bio, avatar } = req.body;
 

@@ -1,5 +1,5 @@
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { ChatList } from '@/components/chat/ChatList';
@@ -7,24 +7,68 @@ import { ChatWindow } from '@/components/chat/ChatWindow';
 import { MainMenu } from '@/components/menu/MainMenu';
 import { FriendsList } from '@/components/friends/FriendsList';
 import { UserSearch } from '@/components/users/UserSearch';
-import { MessageSquare, Users, Search, X } from 'lucide-react';
+import { NewChatFAB } from '@/components/chat/NewChatFAB';
+import { MessageSquare, Users, Search, X, Headphones } from 'lucide-react';
 import { toast } from 'sonner';
 import { findOrCreatePrivateChat } from '@/lib/api/chats';
 import { cn } from '@/lib/utils';
 import { applyThemePreset } from '@/lib/themes';
 import { mediaCache } from '@/lib/cache/mediaCacheManager';
 import { useSocket } from '@/lib/hooks/useSocket';
+import { requestNotificationPermission, updateDocumentTitle } from '@/lib/notifications';
+import { api } from '@/lib/api/client';
+import { IncomingCallModal } from '@/components/call/IncomingCallModal';
+import { ActiveCallOverlay } from '@/components/call/ActiveCallOverlay';
+import { VoiceChannelOverlay } from '@/components/voice/VoiceChannelOverlay';
+import { VoiceChannelsTab } from '@/components/voice/VoiceChannelsTab';
+import { VoiceChannelPanel } from '@/components/voice/VoiceChannelPanel';
+import { VoiceStreamPiP } from '@/components/voice/VoiceStreamPiP';
+import { useVoiceChannelStore } from '@/stores/voiceChannelStore';
+import type { Chat } from '@/types';
 
 export function MessengerPage() {
-    const { appearance, cache } = useSettingsStore();
-    const { activeChat, setActiveChat, loadChats } = useChatStore();
+    const appearance = useSettingsStore((s) => s.appearance);
+    const cache = useSettingsStore((s) => s.cache);
+    const activeChat = useChatStore((s) => s.activeChat);
+    const setActiveChat = useChatStore((s) => s.setActiveChat);
+    const loadChats = useChatStore((s) => s.loadChats);
+    const chats = useChatStore((s) => s.chats);
+    const viewingChannel = useVoiceChannelStore((s) => s.viewingChannel);
 
-    const [isMobile, setIsMobile] = useState(false);
-    const [activeTab, setActiveTab] = useState<'chats' | 'friends'>('chats');
+    const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+    const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
+    const [activeTab, setActiveTab] = useState<'chats' | 'friends' | 'voice'>('chats');
     const [showSearch, setShowSearch] = useState(false);
+    const delayedClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Resizable sidebar (desktop only)
+    const [sidebarWidth, setSidebarWidth] = useState(() => {
+        const saved = localStorage.getItem('rumker-sidebar-width');
+        return saved ? Number(saved) : 340;
+    });
+    const isResizingRef = useRef(false);
 
     // Connect socket for real-time
     useSocket();
+
+    // Request notification permission on mount
+    useEffect(() => {
+        requestNotificationPermission();
+    }, []);
+
+    // Proactive token refresh on mount — prevents stale token logouts
+    useEffect(() => {
+        // Refresh token передаётся через httpOnly cookie автоматически
+        api.get('/auth/me').catch(() => {
+            // Token expired — the api client will auto-refresh via cookie
+        });
+    }, []);
+
+    // Update document title with total unread count
+    useEffect(() => {
+        const totalUnread = chats.reduce((sum, c) => sum + c.unreadCount, 0);
+        updateDocumentTitle(totalUnread);
+    }, [chats]);
 
     // Auto-clean expired media cache on mount
     useEffect(() => {
@@ -49,19 +93,114 @@ export function MessengerPage() {
             setActiveChat(chat);
             loadChats();
             setActiveTab('chats');
+            if (isMobile) setMobileView('chat');
         } catch {
             toast.error('Не удалось открыть чат');
         }
-    }, [setActiveChat, loadChats]);
+    }, [setActiveChat, loadChats, isMobile]);
 
+    const handleChatCreated = useCallback((chat: Chat) => {
+        setActiveChat(chat);
+        loadChats();
+        setActiveTab('chats');
+        if (isMobile) setMobileView('chat');
+    }, [setActiveChat, loadChats, isMobile]);
+
+    // Debounced resize handler (initial value set via useState initializer)
     useEffect(() => {
-        const check = () => setIsMobile(window.innerWidth < 768);
-        check();
+        let timeoutId: ReturnType<typeof setTimeout>;
+        const check = () => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                setIsMobile(window.innerWidth < 768);
+            }, 150);
+        };
         window.addEventListener('resize', check);
-        return () => window.removeEventListener('resize', check);
+        return () => {
+            window.removeEventListener('resize', check);
+            clearTimeout(timeoutId);
+        };
     }, []);
 
+    // Sidebar resize handlers (desktop)
+    const handleResizeStart = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        isResizingRef.current = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        const onMouseMove = (ev: MouseEvent) => {
+            if (!isResizingRef.current) return;
+            const newWidth = Math.min(500, Math.max(260, ev.clientX));
+            setSidebarWidth(newWidth);
+        };
+        const onMouseUp = () => {
+            isResizingRef.current = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            // Save to localStorage
+            setSidebarWidth(w => {
+                localStorage.setItem('rumker-sidebar-width', String(w));
+                return w;
+            });
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+        };
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+    }, []);
+
+    // Sync mobileView when activeChat changes + cancel any pending delayed clear
     useEffect(() => {
+        if (activeChat) {
+            // Cancel the delayed setActiveChat(null) from handleBack — prevents
+            // the race where navigating back then quickly selecting a new chat
+            // would null out the freshly-selected chat after 300ms.
+            if (delayedClearRef.current) {
+                clearTimeout(delayedClearRef.current);
+                delayedClearRef.current = null;
+            }
+            if (isMobile) setMobileView('chat');
+        }
+    }, [activeChat, isMobile]);
+
+    // Clear viewingChannel when a new chat is selected
+    const prevActiveChatForVoiceRef = useRef(activeChat?.id);
+    useEffect(() => {
+        if (activeChat?.id && activeChat.id !== prevActiveChatForVoiceRef.current) {
+            useVoiceChannelStore.getState().setViewingChannel(null);
+        }
+        prevActiveChatForVoiceRef.current = activeChat?.id;
+    }, [activeChat?.id]);
+
+    // Switch to chat view on mobile when viewingChannel is set
+    useEffect(() => {
+        if (viewingChannel && isMobile) {
+            setMobileView('chat');
+        }
+    }, [viewingChannel, isMobile]);
+
+    const handleVoicePanelBack = useCallback(() => {
+        useVoiceChannelStore.getState().setViewingChannel(null);
+        if (isMobile) setMobileView('list');
+    }, [isMobile]);
+
+    const handleBack = useCallback(() => {
+        setMobileView('list');
+        // Delay clearing activeChat so slide animation plays
+        if (delayedClearRef.current) clearTimeout(delayedClearRef.current);
+        delayedClearRef.current = setTimeout(() => {
+            setActiveChat(null);
+        }, 300);
+    }, [setActiveChat]);
+
+    useEffect(() => {
+        return () => {
+            if (delayedClearRef.current) clearTimeout(delayedClearRef.current);
+        };
+    }, []);
+
+    useLayoutEffect(() => {
         // Apply theme preset first (sets all CSS vars)
         if (appearance.themePreset) {
             applyThemePreset(appearance.themePreset);
@@ -96,19 +235,147 @@ export function MessengerPage() {
         );
     }, [appearance.themePreset, appearance.theme, appearance.messageBubbles.borderRadius, appearance.messageBubbles.fontSize, appearance.chatBackground.value, appearance.messageBubbles.outgoingColor, appearance.messageBubbles.incomingColor]);
 
+    // Mobile: use CSS transform slide layout
+    if (isMobile) {
+        return (
+            <div className="h-dvh w-screen overflow-hidden bg-background transition-colors duration-150">
+                <IncomingCallModal />
+                <ActiveCallOverlay />
+                {!viewingChannel && <VoiceStreamPiP />}
+                <div
+                    className="flex h-full w-[200vw]"
+                    style={{
+                        transform: mobileView === 'chat' ? 'translateX(-100vw)' : 'translateX(0)',
+                        transition: 'transform 300ms cubic-bezier(0.25, 0.1, 0.25, 1)',
+                    }}
+                >
+                    {/* Panel 1: Sidebar */}
+                    <div className="w-screen h-full flex flex-col border-r border-border bg-card">
+                        {/* Header */}
+                        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-2 bg-card transition-colors duration-150">
+                            <MainMenu onOpenContacts={() => setActiveTab('friends')} />
+
+                            {showSearch ? (
+                                <>
+                                    <UserSearch
+                                        className="flex-1"
+                                        onSelectUser={(user) => {
+                                            openOrCreateChat(user.id);
+                                            setShowSearch(false);
+                                        }}
+                                    />
+                                    <button
+                                        onClick={() => setShowSearch(false)}
+                                        className="h-9 w-9 flex items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground shrink-0"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="font-semibold text-lg flex-1 text-foreground">Rumker</span>
+                                    <button
+                                        onClick={() => setShowSearch(true)}
+                                        className="h-9 w-9 flex items-center justify-center rounded-full hover:bg-muted transition-colors text-muted-foreground"
+                                    >
+                                        <Search className="h-5 w-5" />
+                                    </button>
+                                </>
+                            )}
+                        </header>
+
+                        {/* Tabs */}
+                        <div className="flex border-b border-border">
+                            <button
+                                onClick={() => setActiveTab('chats')}
+                                className={cn(
+                                    'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors relative',
+                                    activeTab === 'chats'
+                                        ? 'text-tg-primary'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                )}
+                            >
+                                <MessageSquare className="h-4 w-4" />
+                                Чаты
+                                {activeTab === 'chats' && (
+                                    <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-tg-primary rounded-full animate-tab-indicator" />
+                                )}
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('friends')}
+                                className={cn(
+                                    'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors relative',
+                                    activeTab === 'friends'
+                                        ? 'text-tg-primary'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                )}
+                            >
+                                <Users className="h-4 w-4" />
+                                Друзья
+                                {activeTab === 'friends' && (
+                                    <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-tg-primary rounded-full animate-tab-indicator" />
+                                )}
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('voice')}
+                                className={cn(
+                                    'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors relative',
+                                    activeTab === 'voice'
+                                        ? 'text-tg-primary'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                )}
+                            >
+                                <Headphones className="h-4 w-4" />
+                                Голос
+                                {activeTab === 'voice' && (
+                                    <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-tg-primary rounded-full animate-tab-indicator" />
+                                )}
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-hidden relative">
+                            <div className={cn("h-full", activeTab !== 'chats' && "hidden")}>
+                                <ChatList className="h-full" />
+                            </div>
+                            <div className={cn("h-full", activeTab !== 'friends' && "hidden")}>
+                                <FriendsList onMessageFriend={(userId) => openOrCreateChat(userId)} />
+                            </div>
+                            <div className={cn("h-full", activeTab !== 'voice' && "hidden")}>
+                                <VoiceChannelsTab className="h-full" onOpenChat={openOrCreateChat} />
+                            </div>
+                            {activeTab !== 'voice' && <NewChatFAB onChatCreated={handleChatCreated} />}
+                        </div>
+                        <VoiceChannelOverlay />
+                    </div>
+
+                    {/* Panel 2: Chat or Voice Channel Panel */}
+                    <div className="w-screen h-full flex flex-col bg-tg-bg dark:bg-tg-bg-dark min-w-0">
+                        {viewingChannel ? (
+                            <VoiceChannelPanel onBack={handleVoicePanelBack} />
+                        ) : (
+                            <ChatWindow onBack={handleBack} />
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Desktop layout
     return (
         <div className="flex h-dvh w-screen overflow-hidden bg-background transition-colors duration-150">
+            <IncomingCallModal />
+            <ActiveCallOverlay />
+            {!viewingChannel && <VoiceStreamPiP />}
             {/* Sidebar */}
             <aside
-                className={cn(
-                    'flex-col border-r border-border bg-card transition-colors duration-150',
-                    'w-full md:w-[340px] lg:w-[380px] md:min-w-[300px] md:max-w-[420px]',
-                    isMobile && activeChat ? 'hidden' : 'flex'
-                )}
+                className="flex flex-col border-r border-border bg-card transition-colors duration-150 shrink-0"
+                style={{ width: sidebarWidth }}
             >
                 {/* Header */}
                 <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-2 bg-card transition-colors duration-150">
-                    <MainMenu />
+                    <MainMenu onOpenContacts={() => setActiveTab('friends')} />
 
                     {showSearch ? (
                         <>
@@ -153,7 +420,7 @@ export function MessengerPage() {
                         <MessageSquare className="h-4 w-4" />
                         Чаты
                         {activeTab === 'chats' && (
-                            <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-tg-primary rounded-full" />
+                            <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-tg-primary rounded-full animate-tab-indicator" />
                         )}
                     </button>
                     <button
@@ -168,29 +435,55 @@ export function MessengerPage() {
                         <Users className="h-4 w-4" />
                         Друзья
                         {activeTab === 'friends' && (
-                            <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-tg-primary rounded-full" />
+                            <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-tg-primary rounded-full animate-tab-indicator" />
+                        )}
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('voice')}
+                        className={cn(
+                            'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors relative',
+                            activeTab === 'voice'
+                                ? 'text-tg-primary'
+                                : 'text-muted-foreground hover:text-foreground'
+                        )}
+                    >
+                        <Headphones className="h-4 w-4" />
+                        Голос
+                        {activeTab === 'voice' && (
+                            <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-tg-primary rounded-full animate-tab-indicator" />
                         )}
                     </button>
                 </div>
 
                 {/* Content */}
-                <div key={activeTab} className="flex-1 overflow-hidden animate-fade-slide-in">
-                    {activeTab === 'chats' ? (
+                <div className="flex-1 overflow-hidden relative">
+                    <div className={cn("h-full", activeTab !== 'chats' && "hidden")}>
                         <ChatList className="h-full" />
-                    ) : (
+                    </div>
+                    <div className={cn("h-full", activeTab !== 'friends' && "hidden")}>
                         <FriendsList onMessageFriend={(userId) => openOrCreateChat(userId)} />
-                    )}
+                    </div>
+                    <div className={cn("h-full", activeTab !== 'voice' && "hidden")}>
+                        <VoiceChannelsTab className="h-full" onOpenChat={openOrCreateChat} />
+                    </div>
+                    {activeTab !== 'voice' && <NewChatFAB onChatCreated={handleChatCreated} />}
                 </div>
+                <VoiceChannelOverlay />
             </aside>
 
-            {/* Main Chat Area */}
-            <main
-                className={cn(
-                    'flex-1 flex-col bg-tg-bg dark:bg-tg-bg-dark min-w-0 transition-colors duration-150',
-                    isMobile && !activeChat ? 'hidden' : 'flex'
+            {/* Resize Handle */}
+            <div
+                className="w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors shrink-0"
+                onMouseDown={handleResizeStart}
+            />
+
+            {/* Main Chat Area or Voice Channel Panel */}
+            <main className="flex-1 flex flex-col bg-tg-bg dark:bg-tg-bg-dark min-w-0 transition-colors duration-150">
+                {viewingChannel ? (
+                    <VoiceChannelPanel onBack={handleVoicePanelBack} />
+                ) : (
+                    <ChatWindow onBack={() => setActiveChat(null)} />
                 )}
-            >
-                <ChatWindow onBack={() => setActiveChat(null)} />
             </main>
         </div>
     );

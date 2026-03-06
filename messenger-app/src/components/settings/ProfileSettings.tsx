@@ -11,7 +11,8 @@ import { Camera, User, Mail, Phone, Save } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function ProfileSettings() {
-    const { profile, updateProfile } = useSettingsStore();
+    const profile = useSettingsStore((s) => s.profile);
+    const updateProfile = useSettingsStore((s) => s.updateProfile);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [formData, setFormData] = useState({
@@ -90,8 +91,7 @@ export function ProfileSettings() {
             if (authState.user && authState.token) {
                 authState.login(
                     { ...authState.user, firstName: u.firstName, lastName: u.lastName, bio: u.bio, avatar: u.avatar },
-                    authState.token,
-                    authState.refreshToken || undefined
+                    authState.token
                 );
             }
             toast.success('Profile updated successfully');
@@ -121,7 +121,7 @@ export function ProfileSettings() {
             // Sync to auth store
             const authState = useAuthStore.getState();
             if (authState.user && authState.token) {
-                authState.login({ ...authState.user, avatar: avatarUrl }, authState.token, authState.refreshToken || undefined);
+                authState.login({ ...authState.user, avatar: avatarUrl }, authState.token);
             }
             toast.success('Аватар обновлён');
         } catch {
@@ -132,7 +132,7 @@ export function ProfileSettings() {
                 updateProfile({ avatar: dataUrl });
                 const authState = useAuthStore.getState();
                 if (authState.user && authState.token) {
-                    authState.login({ ...authState.user, avatar: dataUrl }, authState.token, authState.refreshToken || undefined);
+                    authState.login({ ...authState.user, avatar: dataUrl }, authState.token);
                 }
                 toast.success('Аватар обновлён (локально)');
             };

@@ -100,6 +100,40 @@ class TelegramService {
     }
 
     /**
+     * Проверка 2FA пароля (Шаг 3 — если аккаунт с двухфакторной аутентификацией)
+     */
+    async checkPassword(userId: string, password: string): Promise<{ sessionString: string }> {
+        const tempClient = this.activeClients.get(`temp_${userId}`);
+        if (!tempClient) throw new Error('Сессия истекла. Начните процесс входа заново.');
+
+        const client = tempClient.client;
+
+        // Получаем SRP-параметры от Telegram
+        const passwordInfo = await client.invoke(new Api.account.GetPassword());
+
+        // Вычисляем SRP-проверку пароля через утилиту gram.js
+        const { computeCheck } = await import('telegram/Password');
+        const inputCheckPassword = await computeCheck(passwordInfo, password);
+
+        // Проверяем пароль
+        await client.invoke(new Api.auth.CheckPassword({ password: inputCheckPassword }));
+
+        // Сохраняем сессию
+        const sessionString = client.session.save() as unknown as string;
+
+        // Перемещаем из temp в active
+        this.activeClients.delete(`temp_${userId}`);
+        this.activeClients.set(userId, { client, userId, phone: tempClient.phone });
+
+        // Настраиваем слушатели
+        client.addEventHandler((event) => {
+            this.handleEvent(userId, event);
+        }, new NewMessage({}));
+
+        return { sessionString };
+    }
+
+    /**
      * Завершение входа (Шаг 2)
      */
     async signIn(userId: string, phoneNumber: string, phoneCodeHash: string, phoneCode: string) {

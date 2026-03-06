@@ -19,7 +19,8 @@ const VISIBILITY_OPTIONS: { value: Visibility; label: string }[] = [
 ];
 
 export function PrivacySettings() {
-    const { privacy, updatePrivacy } = useSettingsStore();
+    const privacy = useSettingsStore((s) => s.privacy);
+    const updatePrivacy = useSettingsStore((s) => s.updatePrivacy);
 
     return (
         <Card>

@@ -1,0 +1,58 @@
+{
+  "models": [
+    {
+      "title": "🥇 GLM-4.7 Flash (Главный агент и кодинг)",
+      "provider": "ollama",
+      "model": "glm-4.7-flash:latest",
+      "apiBase": "http://127.0.0.1:11434"
+    },
+    {
+      "title": "GLM-5 Cloud (Сложный reasoning)",
+      "provider": "ollama",
+      "model": "glm-5:cloud",
+      "apiBase": "http://127.0.0.1:11434"
+    },
+    {
+      "title": "Llama 3.1 8B (Универсальный)",
+      "provider": "ollama",
+      "model": "llama3.1:8b",
+      "apiBase": "http://127.0.0.1:11434"
+    },
+    {
+      "title": "Gemma 3 4B (Быстрый)",
+      "provider": "ollama",
+      "model": "gemma3:4b",
+      "apiBase": "http://127.0.0.1:11434"
+    },
+    {
+      "title": "Qwen2.5-Coder 1.5B (Только для автодополнения)",
+      "provider": "ollama",
+      "model": "qwen2.5-coder:1.5b-base",
+      "apiBase": "http://127.0.0.1:11434"
+    }
+  ],
+
+  "tabAutocompleteModel": {
+    "title": "Qwen2.5-Coder 1.5B (Автодополнение Tab)",
+    "provider": "ollama",
+    "model": "qwen2.5-coder:1.5b-base",
+    "apiBase": "http://127.0.0.1:11434"
+  },
+
+  "embeddingsProvider": {
+    "provider": "ollama",
+    "model": "nomic-embed-text:latest",
+    "apiBase": "http://127.0.0.1:11434"
+  },
+
+  "slashCommands": [
+    { "name": "edit", "description": "Редактировать выделенный код" },
+    { "name": "comment", "description": "Добавить комментарии" },
+    { "name": "fix", "description": "Исправить ошибки" }
+  ],
+
+  "tabAutocompleteOptions": {
+    "debounceDelay": 120,
+    "maxPromptTokens": 1200
+  }
+}

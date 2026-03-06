@@ -1,78 +1,181 @@
-# Rumker Messenger - Project Status & TODO
+# Rumker Messenger — Статус проекта
 
-## 📊 Общий прогресс: ~45%
-
----
-
-## ✅ Выполненные задачи (Done)
-
-### Фаза 1: Инициализация
-- [x] Инициализация проекта (Vite + React + TS)
-- [x] Настройка Tailwind CSS и темы Telegram
-- [x] Установка shadcn/ui и базовых компонентов
-- [x] Структура папок (src/components, stores, lib, server)
-
-### Фаза 2: Безопасность
-- [x] Настройка Helmet.js и CORS на сервере
-- [x] JWT аутентификация (Access & Refresh tokens)
-- [x] Rate limiting для API запросов
-- [x] Валидация данных через Zod (частично)
-
-### Фаза 4: UI/UX (База)
-- [x] Макет MessengerPage (Sidebar + Chat Area)
-- [x] Список чатов (ChatList) с превью и статусами
-- [x] Окно чата (ChatWindow)
-- [x] Пузыри сообщений (MessageBubble)
-- [x] Компоненты для медиа (Uploader, Viewer)
-
-### Фаза 8/9: База данных и Auth
-- [x] Prisma Schema (User, Chat, Message, Session)
-- [x] Регистрация/Вход через Email
-- [x] Интеграция Telegram Auth через `gram.js` (Send Code, Sign In)
-- [x] Сохранение Telegram-сессий в БД
+Последнее обновление: 02.03.2026
 
 ---
 
-## 🔄 В процессе (In Progress)
-
-### Фаза 3: Кэширование медиа
-- [ ] Интеграция `MediaCacheManager` (IndexedDB) с UI
-- [ ] Оптимизация отображения закэшированных изображений
-
-### Фаза 8: Интеграция с Telegram
-- [ ] Синхронизация истории сообщений при входе
-- [ ] Получение списка реальных диалогов через `gram.js`
-- [ ] Обработка входящих обновлений (Updates) на сервере
+## Общий прогресс: ~85%
 
 ---
 
-## 📅 Осталось сделать (Backlog)
+## Выполненные задачи
 
-### Фаза 5: Система настроек
-- [ ] Личный кабинет (редактирование профиля, аватара)
-- [ ] Настройки внешнего вида (смена фона, выбор темы)
-- [ ] Управление кэшем (просмотр размера, очистка)
+### Инициализация и инфраструктура
+- [x] Инициализация проекта (Vite + React 19 + TypeScript)
+- [x] TailwindCSS 4 + shadcn/ui
+- [x] Express 5 бэкенд с tsx watch
+- [x] Prisma ORM + Supabase PostgreSQL
+- [x] Структура папок (components, stores, lib, server)
+- [x] Vite proxy для `/api`, `/uploads`, `/socket.io`
+- [x] Production build: Express раздаёт `dist/`
 
-### Фаза 6: Функционал сообщений (Реальный)
-- [ ] Замена Mock-отправки на реальные вызовы Telegram API
-- [ ] Поддержка разных типов (Голосовые, Стикеры, Файлы)
-- [ ] Ответы (Reply) и пересылка (Forward)
-- [ ] Редактирование и удаление сообщений
+### Безопасность
+- [x] Helmet.js для HTTP заголовков
+- [x] CORS настройка
+- [x] JWT access (15 мин) + refresh (7 дней) токены
+- [x] bcrypt хеширование паролей
+- [x] Rate limiting (500 req / 15 мин)
+- [x] Zod валидация на эндпоинтах auth
+- [x] Fix: refresh token больше не ротируется (исправлен race condition)
 
-### Фаза 7: Real-time (Socket.io)
-- [ ] Индикаторы "Печатает..." (Typing indicators)
-- [ ] Online/Offline статусы
-- [ ] Push-уведомления (браузерные)
+### Авторизация
+- [x] Регистрация через Email (username обязателен)
+- [x] Вход через Email
+- [x] Вход через Telegram (gram.js: send-code + sign-in)
+- [x] JWT access/refresh flow
+- [x] Аккаунт-свитчер на странице логина (сохранённые аккаунты, быстрый вход)
+- [x] Очистка tokenStorage при logout
 
-### Фаза 11-13: Оптимизация и Деплой
-- [ ] Адаптивность для мобильных устройств (улучшение)
-- [ ] Виртуализация длинных списков сообщений
-- [ ] Docker контейнеризация
-- [ ] Настройка Nginx прокси
+### Чаты и сообщения
+- [x] Создание приватных чатов
+- [x] Создание групповых чатов и каналов
+- [x] Отправка текстовых сообщений (оптимистичное обновление)
+- [x] Отправка фото, видео, голосовых, файлов
+- [x] Редактирование сообщений
+- [x] Удаление сообщений (soft delete)
+- [x] Ответы (reply) на сообщения
+- [x] Закрепление/открепление сообщений (pin/unpin)
+- [x] Поиск по сообщениям в чате
+- [x] Shared media (фото/видео/файлы)
+- [x] Контекстное меню сообщений
+- [x] Drag-and-drop файлов в чат
+- [x] Пагинация (infinite scroll вверх)
+- [x] Graceful `/read` endpoint (не падает при ошибке DB)
+
+### Реалтайм (Socket.io)
+- [x] Socket.io сервер с JWT аутентификацией
+- [x] Авто-присоединение ко всем комнатам при подключении
+- [x] Доставка сообщений в реальном времени
+- [x] Индикаторы "печатает..."
+- [x] Онлайн/Оффлайн статусы
+- [x] Read receipts
+- [x] Pin/Unpin в реалтайме
+- [x] Fix: пользователь больше не покидает комнаты при переключении чатов
+- [x] Fix: stale closure в useSocket (currentUserId)
+
+### Друзья
+- [x] API друзей (заявки, принятие, отклонение, удаление)
+- [x] Поиск пользователей по username
+- [x] UI: вкладки Друзья / Заявки
+- [x] Socket.io уведомления о заявках
+
+### Уведомления
+- [x] Браузерные push-уведомления
+- [x] Звуковые уведомления (Web Audio API)
+- [x] Fix: AudioContext.resume() для браузерной политики
+- [x] Счётчик непрочитанных в заголовке
+- [x] Mute/Unmute чатов
+
+### UI/UX
+- [x] Адаптивный дизайн (мобильный + десктоп)
+- [x] Slide-анимации на мобильных
+- [x] Свайп-назад
+- [x] 5 тем-пресетов (Classic, Ocean, Midnight, Rose, Sunset)
+- [x] Тёмная / Светлая / Авто тема
+- [x] Кастомизация баблов (цвет, скругление, размер шрифта)
+- [x] Хвостики сообщений (Bezier curves)
+- [x] Emoji-пикер
+- [x] Кэш медиа (IndexedDB) с настройками
+- [x] Профиль пользователя (боковая панель)
+- [x] Telegram-style профили (чистый заголовок, X слева, карандаш справа, tap-to-copy инфо)
+- [x] Telegram-style анимации профилей (header-in, item slide-in, section transition)
+- [x] Telegram-style анимации чат-листа (staggered fade-in)
 
 ---
 
-## 🧨 Текущие ошибки и блокировки
-1. **Prisma Generate**: Требуется запуск в правильном окружении (ноды).
-2. **Gram.js Session**: Нужно проверить шифрование сессий перед сохранением в БД.
-3. **Proxy**: Vite Proxy настроен, нужно убедиться, что бэкенд запущен на порту 3000.
+## Исправлено (27.02.2026)
+
+- [x] **React 19 Maximum update depth exceeded** — заменены все вызовы Zustand-сторов без селектора на явные селекторы. Затронуто 12+ файлов во всех компонентах. Сайт теперь запускается без ошибок.
+
+- [x] **"Нет сообщений" race condition** — добавлен `loadedChatsRef` (Set<string>), "Нет сообщений" показывается только после завершения первой загрузки для конкретного чата.
+
+- [x] **MediaViewer переписан (Telegram-style)** — имя отправителя + время, thumbnail strip снизу, pinch-to-zoom, double-tap zoom, pan при зуме, fullscreen. UserProfilePanel + GroupInfoPanel: onclick на медиа открывает просмотрщик. Исправлена ошибка рендера внутри Sheet-портала (вынесен за пределы content).
+
+- [x] **GroupInfoPanel — поиск участников** — строка поиска скрыта по умолчанию, открывается по кнопке 🔍, закрывается крестиком.
+
+---
+
+## В процессе / Нужно протестировать
+
+- [ ] **Telegram синхронизация** — доработать получение истории диалогов через gram.js
+- [x] **2FA** — UI для ввода пароля 2FA при входе через Telegram
+- [ ] **Upload в Supabase Storage** — проверить bucket `chat-media`, RLS-политики
+
+---
+
+## Бэклог
+
+### Высокий приоритет
+- [ ] **Пересылка сообщений (forward)** — UI есть частично, бэкенд не реализован
+- [x] **Реакции на сообщения** — DB + API + Socket.io + фронтенд (toggle, optimistic update)
+- [x] **Code splitting** — React.lazy() для Settings, Messenger, GroupInfoPanel, PollCreator, GifPicker + manualChunks (react, socket.io, lucide, forms)
+- [x] **Виртуализация списков** — @tanstack/react-virtual для списка сообщений (useVirtualizer, measureElement, overscan)
+
+### Средний приоритет
+- [ ] **Стикеры** — загрузка и отправка стикер-паков
+- [ ] **Service Worker** — offline доступ к кэшированным сообщениям
+- [ ] **Pull-to-refresh** — обновление списка чатов свайпом вниз
+
+### Низкий приоритет
+- [ ] **End-to-end шифрование** — для приватных чатов
+- [ ] **Каналы** — расширенный функционал (подписчики, статистика)
+- [ ] **Адаптивность для планшетов** — iPad breakpoint
+- [ ] **Accessibility (a11y)** — aria-labels, фокус-менеджмент
+
+---
+
+## Технический долг
+
+- [ ] **Удалить дублирование** — `chats.ts` vs `chats_supabase.ts`, `users.ts` vs `users_supabase.ts`
+- [ ] **Zod на всех эндпоинтах** — сейчас только auth, нужно на chats/friends/users
+- [ ] **Тесты** — unit для API, интеграционные для auth flow
+- [ ] **CI/CD** — GitHub Actions (lint + build + тесты)
+- [ ] **ENV validation** — проверка обязательных переменных при старте
+- [ ] **Docker** — Dockerfile + docker-compose
+- [ ] **Nginx** — reverse proxy для production
+
+---
+
+## Исправленные баги (Changelog)
+
+### 17.02.2026
+- **Fix: сообщения не приходили в реалтайме** — `ChatWindow` вызывал `leaveChat()` при переключении чатов, убирая пользователя из Socket.io комнаты. Удалён `leaveChat`.
+- **Fix: звук уведомлений не воспроизводился** — `AudioContext` создавался в `suspended` состоянии. Добавлен вызов `.resume()`.
+- **Fix: stale closure в useSocket** — `currentUserId` захватывался один раз при маунте. Заменён на `getMyId()` из store.
+- **Fix: `/read` возвращал 500** — upsert в `message_reads` обёрнут в try/catch, теперь всегда возвращает 200.
+- **Fix: случайные logout** — `/refresh` больше не ротирует refresh token. Выдаёт только новый accessToken.
+- **Fix: tokenStorage не очищался** — `logout()` теперь вызывает `tokenStorage.clear()`.
+- **Feature: аккаунт-свитчер** — сохранённые аккаунты на странице входа с быстрым логином.
+
+### 19.02.2026
+- **Feature: Telegram-style меню вложений** — popup-меню при нажатии скрепки с 7 пунктами (Фото/Видео, Документ, Опрос, Геолокация, Контакт, Стикер, GIF).
+- **Feature: Опросы** — полный CRUD: создание, голосование, закрытие; реалтайм обновление через Socket.io (`poll:update`). БД: таблицы `polls`, `poll_options`, `poll_votes`.
+- **Feature: Геолокация** — отправка текущих координат, отображение в пузыре с ссылкой на Google Maps.
+- **Feature: Контакт** — выбор друга для шаринга, отображение в пузыре с кнопкой "Написать".
+- **Feature: Голосовые каналы** — вкладка "Голос" в сайдбаре, WebRTC аудио через VoiceChannelPeerManager, VAD, mute/deafen.
+- **Feature: metadata JSONB** — расширяемые данные в сообщениях (location, contact) через metadata колонку.
+
+### 20.02.2026
+- **Feature: Telegram 2FA** — при входе через Telegram с включённой 2FA показывается поле ввода пароля. Бэкенд: `checkPassword()` через gram.js SRP (`computeCheck`). Роут: `POST /api/auth/telegram/check-password`.
+- **Feature: Реакции на сообщения** — toggle emoji на сообщениях. DB: таблица `message_reactions` (migration 005). API: `POST /:chatId/messages/:messageId/reactions`. Socket.io: `message:reaction` event. Фронтенд: optimistic update с revert on error.
+- **Feature: Code splitting** — route-level (`React.lazy` для Messenger, Settings) + component-level (GroupInfoPanel, PollCreator, GifPicker) + vendor chunks (react, socket.io-client, lucide-react, forms) в `vite.config.ts`.
+- **Feature: Виртуализация сообщений** — `@tanstack/react-virtual` в ChatWindow. Flat-массив `VirtualItemData` (date-separator, unread-divider, message). `useVirtualizer` с `measureElement`, `overscan: 15`. DOM рендерит ~30 элементов вместо всех.
+
+### 01.03.2026
+- **Redesign: Telegram-style UserProfilePanel** — убран градиентный заголовок, заменён на чистый `bg-card`. Кнопка закрытия (X) перенесена влево, карандаш редактирования — вправо. Удалена вкладка "Инфо" — информация (телефон, юзернейм, о себе) всегда видна как Telegram-style список с tap-to-copy. Кнопки действий (Написать, Добавить в группу) переделаны в полноширинные строки. Удалены отдельные кнопки ID/Copy/@username.
+- **Redesign: Telegram-style GroupInfoPanel** — убран градиент, X слева, карандаш справа. Аватар с тематическим fallback. Поле редактирования названия использует цвета темы.
+- **Fix: "2 участника" в ЛС** — GroupInfoPanel показывал "Группа · N участников" для приватных чатов. Добавлен guard `{!isPrivateChat && ...}` вокруг подзаголовка.
+- **Fix: панель профиля накладывалась на панель группы** — `handleGroupInfo` и `handleAvatarClick` теперь закрывают противоположную панель (`setGroupInfoOpen(false)` / `setProfileOpen(false)`) перед открытием новой.
+- **Fix: панели не закрывались при переключении чатов** — `useEffect` на `activeChat?.id` в ChatWindow закрывает оба: `groupInfoOpen` + `profileOpen` при смене чата.
+- **Animations: Telegram-style анимации профилей** — новые CSS keyframes: `profile-header-in` (scale+fade заголовка), `profile-item-in` (slide-from-right для инфо-строк с staggered delay), `profile-section-in` (slide-up для переключения вкладок медиа/файлы/ссылки). Применены к UserProfilePanel и GroupInfoPanel.
+- **Animations: Telegram-style анимации чат-листа** — новый keyframe `chat-item-in` (fade + translateY). Применён к каждому элементу ChatList со staggered delay (30ms × index, первые 20 элементов).

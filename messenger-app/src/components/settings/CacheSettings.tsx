@@ -19,7 +19,8 @@ interface CacheStats {
 }
 
 export function CacheSettings() {
-    const { cache, updateCache } = useSettingsStore();
+    const cache = useSettingsStore((s) => s.cache);
+    const updateCache = useSettingsStore((s) => s.updateCache);
     const [stats, setStats] = useState<CacheStats | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 

@@ -8,6 +8,13 @@ import type {
     PrivacySettings,
 } from '@/types';
 import { THEME_PRESETS, applyThemePreset } from '@/lib/themes';
+import type { SoundSettings, SoundType, SoundConfig } from '@/lib/sounds/soundEngine';
+import { defaultSoundSettings, soundEngine } from '@/lib/sounds/soundEngine';
+
+interface LocalProfileOverride {
+    nickname?: string;
+    avatar?: string;
+}
 
 interface SettingsStore {
     // State
@@ -17,6 +24,8 @@ interface SettingsStore {
     notifications: NotificationSettings;
     privacy: PrivacySettings;
     language: string;
+    soundSettings: SoundSettings;
+    localProfileOverrides: Record<string, LocalProfileOverride>;
 
     // Actions
     updateAppearance: (settings: Partial<ChatAppearanceSettings>) => void;
@@ -27,6 +36,11 @@ interface SettingsStore {
     setLanguage: (language: string) => void;
     setTheme: (theme: 'light' | 'dark' | 'auto') => void;
     setThemePreset: (presetId: string) => void;
+    updateSoundSettings: (settings: Partial<SoundSettings>) => void;
+    updateSoundConfig: (type: SoundType, config: Partial<SoundConfig>) => void;
+    setMasterVolume: (volume: number) => void;
+    setLocalProfileOverride: (userId: string, override: LocalProfileOverride) => void;
+    removeLocalProfileOverride: (userId: string) => void;
     resetSettings: () => void;
 }
 
@@ -50,7 +64,7 @@ const defaultAppearance: ChatAppearanceSettings = {
     compactMode: false,
     showAvatars: true,
     showTimeStamps: true,
-    showTails: true,
+    showTails: false,
 };
 
 const defaultCache: CacheSettings = {
@@ -97,6 +111,8 @@ export const useSettingsStore = create<SettingsStore>()(
             notifications: defaultNotifications,
             privacy: defaultPrivacy,
             language: 'ru',
+            soundSettings: defaultSoundSettings,
+            localProfileOverrides: {},
 
             // Actions
             updateAppearance: (settings) =>
@@ -130,6 +146,11 @@ export const useSettingsStore = create<SettingsStore>()(
                 set((state) => {
                     // Apply theme to document
                     const root = document.documentElement;
+
+                    // Smooth transition
+                    root.classList.add('theme-transitioning');
+                    setTimeout(() => root.classList.remove('theme-transitioning'), 300);
+
                     if (theme === 'dark') {
                         root.classList.add('dark');
                     } else if (theme === 'light') {
@@ -189,6 +210,11 @@ export const useSettingsStore = create<SettingsStore>()(
                     const preset = THEME_PRESETS.find((p) => p.id === presetId);
                     if (!preset) return state;
 
+                    // Smooth transition
+                    const root = document.documentElement;
+                    root.classList.add('theme-transitioning');
+                    setTimeout(() => root.classList.remove('theme-transitioning'), 300);
+
                     applyThemePreset(presetId);
 
                     return {
@@ -210,6 +236,47 @@ export const useSettingsStore = create<SettingsStore>()(
                     };
                 }),
 
+            updateSoundSettings: (settings) =>
+                set((state) => {
+                    const next = { ...state.soundSettings, ...settings };
+                    soundEngine.updateSettings(next);
+                    return { soundSettings: next };
+                }),
+
+            updateSoundConfig: (type, config) =>
+                set((state) => {
+                    const next: SoundSettings = {
+                        ...state.soundSettings,
+                        sounds: {
+                            ...state.soundSettings.sounds,
+                            [type]: { ...state.soundSettings.sounds[type], ...config },
+                        },
+                    };
+                    soundEngine.updateSettings(next);
+                    return { soundSettings: next };
+                }),
+
+            setMasterVolume: (volume) =>
+                set((state) => {
+                    const next = { ...state.soundSettings, masterVolume: volume };
+                    soundEngine.updateSettings(next);
+                    return { soundSettings: next };
+                }),
+
+            setLocalProfileOverride: (userId, override) =>
+                set((state) => ({
+                    localProfileOverrides: {
+                        ...state.localProfileOverrides,
+                        [userId]: { ...state.localProfileOverrides[userId], ...override },
+                    },
+                })),
+
+            removeLocalProfileOverride: (userId) =>
+                set((state) => {
+                    const { [userId]: _, ...rest } = state.localProfileOverrides;
+                    return { localProfileOverrides: rest };
+                }),
+
             resetSettings: () =>
                 set({
                     appearance: defaultAppearance,
@@ -217,6 +284,8 @@ export const useSettingsStore = create<SettingsStore>()(
                     notifications: defaultNotifications,
                     privacy: defaultPrivacy,
                     language: 'ru',
+                    soundSettings: defaultSoundSettings,
+                    localProfileOverrides: {},
                 }),
         }),
         {
@@ -228,7 +297,21 @@ export const useSettingsStore = create<SettingsStore>()(
                 notifications: state.notifications,
                 privacy: state.privacy,
                 language: state.language,
+                soundSettings: state.soundSettings,
+                localProfileOverrides: state.localProfileOverrides,
             }),
+            onRehydrateStorage: () => (state) => {
+                if (state?.soundSettings) {
+                    // Sync sound engine with persisted settings
+                    soundEngine.updateSettings(state.soundSettings);
+                    // Load any custom sounds
+                    for (const [type, config] of Object.entries(state.soundSettings.sounds)) {
+                        if (config.customSoundData) {
+                            soundEngine.loadCustomSound(type as SoundType, config.customSoundData);
+                        }
+                    }
+                }
+            },
         }
     )
 );

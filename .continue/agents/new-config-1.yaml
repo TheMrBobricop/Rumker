@@ -1,0 +1,66 @@
+{
+  "models": [
+    {
+      "title": "GLM-4.7 Flash (Main / Coding & Agent)",
+      "provider": "ollama",
+      "model": "glm-4.7-flash:latest",
+      "apiBase": "http://127.0.0.1:11434"
+    },
+    {
+      "title": "GLM-5 Cloud (Advanced Reasoning / Agentic)",
+      "provider": "ollama",
+      "model": "glm-5:cloud",
+      "apiBase": "http://127.0.0.1:11434",
+      "note": "Hybrid — часть в облаке Z.ai, но работает через Ollama API"
+    },
+    {
+      "title": "Llama 3.1 8B (Balanced / General)",
+      "provider": "ollama",
+      "model": "llama3.1:8b",
+      "apiBase": "http://127.0.0.1:11434"
+    },
+    {
+      "title": "Gemma 3 4B (Fast / Lightweight)",
+      "provider": "ollama",
+      "model": "gemma3:4b",
+      "apiBase": "http://127.0.0.1:11434"
+    },
+    {
+      "title": "Qwen2.5-Coder 1.5B Base (Very Fast Autocomplete)",
+      "provider": "ollama",
+      "model": "qwen2.5-coder:1.5b-base",
+      "apiBase": "http://127.0.0.1:11434"
+    }
+  ],
+
+  "tabAutocompleteModel": {
+    "title": "Qwen2.5-Coder 1.5B (Fast Autocomplete)",
+    "provider": "ollama",
+    "model": "qwen2.5-coder:1.5b-base",
+    "apiBase": "http://127.0.0.1:11434"
+  },
+
+  "embeddingsProvider": {
+    "provider": "ollama",
+    "model": "nomic-embed-text:latest",
+    "apiBase": "http://127.0.0.1:11434"
+  },
+
+  "models": [
+    // ... (оставь предыдущий массив models выше, это дубликат для ясности)
+  ],
+
+  "slashCommands": [
+    {
+      "name": "edit",
+      "description": "Edit the selected code",
+      "step": "Edit the highlighted code according to the user's instructions."
+    }
+  ],
+
+  "tabAutocompleteOptions": {
+    "debounceDelay": 150,
+    "maxPromptTokens": 1500,
+    "useCopyBuffer": false
+  }
+}

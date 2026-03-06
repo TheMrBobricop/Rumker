@@ -57,7 +57,10 @@ const TEXT_COLOR_PRESETS = [
 ];
 
 export function AppearanceSettings() {
-    const { appearance, updateAppearance, setTheme, setThemePreset } = useSettingsStore();
+    const appearance = useSettingsStore((s) => s.appearance);
+    const updateAppearance = useSettingsStore((s) => s.updateAppearance);
+    const setTheme = useSettingsStore((s) => s.setTheme);
+    const setThemePreset = useSettingsStore((s) => s.setThemePreset);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [activeSection, setActiveSection] = useState<string | null>(null);
 
