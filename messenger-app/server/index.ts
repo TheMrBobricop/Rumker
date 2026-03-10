@@ -98,18 +98,6 @@ app.use(cookieParser());
 // --- Статические файлы (локальные загрузки) ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-app.use('/uploads', express.static(path.resolve(__dirname, '../uploads'), {
-    setHeaders: (res, filePath) => {
-        // Prevent browser from executing uploaded files (XSS via SVG, HTML, etc.)
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.setHeader('Content-Security-Policy', "default-src 'none'");
-        // Force download for potentially dangerous types
-        const ext = path.extname(filePath).toLowerCase();
-        if (['.svg', '.html', '.htm', '.xml'].includes(ext)) {
-            res.setHeader('Content-Disposition', 'attachment');
-        }
-    },
-}));
 
 // --- API Роуты ---
 import routes from './routes/index.js';
@@ -123,7 +111,7 @@ if (fs.existsSync(distPath)) {
 
     // SPA catch-all: все не-API пути → index.html (Express 5 syntax)
     app.use((req, res, next) => {
-        if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || req.path.startsWith('/socket.io')) {
+        if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
             return next();
         }
         res.sendFile(path.join(distPath, 'index.html'));

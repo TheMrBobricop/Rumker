@@ -2,22 +2,10 @@ import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import crypto from 'crypto';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
 import { uploadLimiter, sanitizeFilename } from '../lib/security.js';
 import { supabase } from '../lib/supabase.js';
 
 const router = Router();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const UPLOADS_DIR = path.resolve(__dirname, '../../uploads');
-
-// Ensure uploads directory exists
-if (!fs.existsSync(UPLOADS_DIR)) {
-    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-}
 
 const ALLOWED_MIME_TYPES = [
     // Images
@@ -53,20 +41,9 @@ const ALLOWED_MIME_TYPES = [
     'application/x-rar-compressed',
 ];
 
-const diskStorage = multer.diskStorage({
-    destination: (_req, _file, cb) => {
-        const tmpDir = path.resolve(__dirname, '../../uploads/.tmp');
-        if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-        cb(null, tmpDir);
-    },
-    filename: (_req, file, cb) => {
-        const ext = path.extname(file.originalname) || `.${file.mimetype.split('/')[1]}`;
-        cb(null, `${crypto.randomUUID()}${ext}`);
-    },
-});
-
 const upload = multer({
-    storage: diskStorage,
+    // Keep files purely in memory; nothing touches server filesystem
+    storage: multer.memoryStorage(),
     limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
     fileFilter: (_req, file, cb) => {
         if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
@@ -78,52 +55,39 @@ const upload = multer({
     },
 });
 
-async function trySupabaseUpload(file: Express.Multer.File, userId: string) {
+async function uploadToSupabase(file: Express.Multer.File, userId: string) {
     try {
-        const ext = path.extname(file.originalname) || `.${file.mimetype.split('/')[1]}`;
+        const ext =
+            file.originalname.includes('.')
+                ? file.originalname.slice(file.originalname.lastIndexOf('.'))
+                : `.${file.mimetype.split('/')[1]}`;
         const fileName = `${crypto.randomUUID()}${ext}`;
         const filePath = `uploads/${userId}/${fileName}`;
 
-        const fileBuffer = await fs.promises.readFile(file.path);
+        if (!file.buffer) {
+            throw new Error('Upload buffer missing');
+        }
         const { error: uploadError } = await supabase.storage
             .from('chat-media')
-            .upload(filePath, fileBuffer, {
+            .upload(filePath, file.buffer, {
                 contentType: file.mimetype,
                 upsert: false,
             });
 
         if (uploadError) {
             console.warn('Supabase storage upload failed:', uploadError.message);
-            return null;
+            throw uploadError;
         }
 
         const { data: publicUrlData } = supabase.storage
             .from('chat-media')
             .getPublicUrl(filePath);
 
-        // Clean up tmp file after successful Supabase upload
-        try { fs.unlinkSync(file.path); } catch {}
         return publicUrlData.publicUrl;
     } catch (err) {
-        console.warn('Supabase storage unavailable, using local storage');
-        return null;
+        console.warn('Supabase storage unavailable:', err);
+        throw err;
     }
-}
-
-function saveLocally(file: Express.Multer.File, userId: string): string {
-    const userDir = path.join(UPLOADS_DIR, userId);
-    if (!fs.existsSync(userDir)) {
-        fs.mkdirSync(userDir, { recursive: true });
-    }
-
-    const ext = path.extname(file.originalname) || `.${file.mimetype.split('/')[1]}`;
-    const fileName = `${crypto.randomUUID()}${ext}`;
-    const destPath = path.join(userDir, fileName);
-
-    // Move from tmp to final location (disk-to-disk, no memory spike)
-    fs.renameSync(file.path, destPath);
-
-    return `/uploads/${userId}/${fileName}`;
 }
 
 // Main upload handler
@@ -150,13 +114,8 @@ router.post('/', authenticateToken, uploadLimiter, (req: AuthRequest, res: Respo
             return res.status(401).json({ message: 'Authentication required' });
         }
 
-        // Try Supabase first, fall back to local storage
-        let url = await trySupabaseUpload(file, userId);
-
-        if (!url) {
-            url = saveLocally(file, userId);
-            console.log(`File saved locally: ${url}`);
-        }
+        // Upload strictly to Supabase; if unavailable, fail (no local disk storage)
+        const url = await uploadToSupabase(file, userId);
 
         res.json({
             url,
@@ -166,7 +125,7 @@ router.post('/', authenticateToken, uploadLimiter, (req: AuthRequest, res: Respo
         });
     } catch (error) {
         console.error('Upload handler error:', error);
-        res.status(500).json({ message: 'Failed to upload file' });
+        res.status(503).json({ message: 'Media storage unavailable. Please retry later.' });
     }
 });
 

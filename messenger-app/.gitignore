@@ -10,6 +10,9 @@ lerna-debug.log*
 node_modules
 dist
 
+# Media uploads (never commit user media)
+uploads/
+
 # Environment variables (secrets)
 .env
 .env.*
