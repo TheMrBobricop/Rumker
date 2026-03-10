@@ -7,7 +7,7 @@
 ### Frontend
 - **React 19** + TypeScript, Vite 7, TailwindCSS 4
 - **shadcn/ui** (Radix) -- компоненты UI
-- **Zustand** -- стейт-менеджмент (stores: auth, chat, settings, media)
+- **Zustand** -- стейт-менеджмент (stores: auth, chat, settings, media, call, voiceChannel)
 - **React Router v7** -- маршрутизация (`/login`, `/`, `/settings`)
 - **Lucide React** -- иконки
 - **Sonner** -- toast-уведомления
@@ -23,7 +23,8 @@
 ### База данных
 - **PostgreSQL** (Supabase) в продакшене
 - **SQLite** (`prisma/dev.db`) для локальной разработки
-- Модели: `User`, `Chat`, `ChatParticipant`, `Message`, `MessageRead`, `Session`, `FriendRequest`, `Contact`
+- Модели: `User`, `Chat`, `ChatParticipant`, `Message`, `MessageRead`, `MessageReaction`, `Session`, `FriendRequest`, `Poll`, `PollOption`, `PollVote`, `VoiceChannel`
+- `users.privacy_settings` — JSONB для настроек конфиденциальности (lastSeen, profilePhoto, phoneNumber, readReceipts)
 
 ## Быстрый старт
 
@@ -100,7 +101,7 @@ messenger-app/
 │   │   ├── friends/              # FriendsList, UserSearch
 │   │   ├── media/                # CachedImage, MediaViewer, MediaUploader
 │   │   ├── menu/                 # MainMenu (боковое меню)
-│   │   ├── settings/             # AppearanceSettings, ProfileSettings, CacheSettings
+│   │   ├── settings/             # AppearanceSettings, ProfileSettings, CacheSettings, PrivacySettings
 │   │   ├── users/                # UserSearch, UserProfilePanel
 │   │   └── ui/                   # shadcn/ui компоненты
 │   ├── lib/
@@ -127,7 +128,7 @@ messenger-app/
 │   │   └── users.ts              # Альтернативный Prisma-вариант
 │   ├── middleware/auth.ts         # JWT верификация (authenticateToken)
 │   ├── services/telegram.ts       # gram.js интеграция
-│   ├── socket/index.ts            # Socket.io (заглушка)
+│   ├── socket/index.ts            # Socket.io (JWT auth, реалтайм, last_seen, online status)
 │   ├── lib/supabase.ts            # Supabase клиент
 │   └── index.ts                   # Express сервер с Helmet/CORS
 │
@@ -157,8 +158,12 @@ messenger-app/
 | Friends | `POST /api/friends/request` | Отправить заявку |
 | Friends | `POST /api/friends/accept/:id` | Принять |
 | Friends | `POST /api/friends/reject/:id` | Отклонить |
+| Chats | `GET /api/chats/:id/read-receipts` | Кто прочитал |
+| Chats | `POST /api/chats/:id/read` | Отметить прочитанным |
 | Upload | `POST /api/upload` | Загрузка медиа (до 50MB) |
 | Users | `GET /api/users/search?q=` | Поиск пользователей |
+| Users | `GET /api/users/me/privacy` | Настройки конфиденциальности |
+| Users | `PUT /api/users/me/privacy` | Обновить конфиденциальность |
 | Health | `GET /api/health` | Статус сервера |
 
 ### Ключевые паттерны

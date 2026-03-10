@@ -1,10 +1,10 @@
 # Rumker Messenger — Статус проекта
 
-Последнее обновление: 02.03.2026
+Последнее обновление: 06.03.2026
 
 ---
 
-## Общий прогресс: ~85%
+## Общий прогресс: ~88%
 
 ---
 
@@ -58,7 +58,7 @@
 - [x] Доставка сообщений в реальном времени
 - [x] Индикаторы "печатает..."
 - [x] Онлайн/Оффлайн статусы
-- [x] Read receipts
+- [x] Read receipts (Telegram-style ✓✓, persistent через message_reads, real-time через socket)
 - [x] Pin/Unpin в реалтайме
 - [x] Fix: пользователь больше не покидает комнаты при переключении чатов
 - [x] Fix: stale closure в useSocket (currentUserId)
@@ -102,6 +102,17 @@
 - [x] **MediaViewer переписан (Telegram-style)** — имя отправителя + время, thumbnail strip снизу, pinch-to-zoom, double-tap zoom, pan при зуме, fullscreen. UserProfilePanel + GroupInfoPanel: onclick на медиа открывает просмотрщик. Исправлена ошибка рендера внутри Sheet-портала (вынесен за пределы content).
 
 - [x] **GroupInfoPanel — поиск участников** — строка поиска скрыта по умолчанию, открывается по кнопке 🔍, закрывается крестиком.
+
+---
+
+## Выполнено (06.03.2026)
+
+- [x] **Telegram-style read receipts** — двойная галочка (✓✓) на прочитанных сообщениях. Бэкенд возвращает `status: 'read'` из `message_reads` таблицы. Real-time через `message:read` socket event. Persistent — сохраняется между перезаходами
+- [x] **Кто прочитал (контекстное меню)** — Telegram-style: в личных чатах "Прочитано HH:MM", в группах — аватарки прочитавших в ряд, клик раскрывает список с именами и временем
+- [x] **Контекстное меню на всю строку** — правый клик в любом месте строки сообщения (не только на баббле) открывает меню
+- [x] **Last seen** — сокет обновляет `last_seen` и `is_online` в БД при подключении/отключении
+- [x] **Настройки конфиденциальности** — `users.privacy_settings` JSONB колонка. API: GET/PUT `/api/users/me/privacy`. UI: Последний визит, Фото профиля, Номер телефона (Все/Контакты/Никто) + переключатель Отчёты о прочтении
+- [x] **Read receipts privacy** — если пользователь отключает отчёты о прочтении, клиент не отправляет read events
 
 ---
 
@@ -179,3 +190,11 @@
 - **Fix: панели не закрывались при переключении чатов** — `useEffect` на `activeChat?.id` в ChatWindow закрывает оба: `groupInfoOpen` + `profileOpen` при смене чата.
 - **Animations: Telegram-style анимации профилей** — новые CSS keyframes: `profile-header-in` (scale+fade заголовка), `profile-item-in` (slide-from-right для инфо-строк с staggered delay), `profile-section-in` (slide-up для переключения вкладок медиа/файлы/ссылки). Применены к UserProfilePanel и GroupInfoPanel.
 - **Animations: Telegram-style анимации чат-листа** — новый keyframe `chat-item-in` (fade + translateY). Применён к каждому элементу ChatList со staggered delay (30ms × index, первые 20 элементов).
+
+### 06.03.2026
+- **Feature: Telegram-style read receipts** — бэкенд GET messages возвращает `status: 'read'` из `message_reads` таблицы. `markAsRead` помечает ВСЕ сообщения до отметки прочтения. Persistent между перезаходами.
+- **Feature: "Кто прочитал" в контекстном меню** — в ЛС: "Прочитано HH:MM" с синей ✓✓; в группах: аватарки в ряд + клик раскрывает полный список.
+- **Feature: Контекстное меню на всю строку** — правый клик в любом месте строки сообщения открывает меню.
+- **Feature: Last seen tracking** — сокет обновляет `last_seen` + `is_online` в БД при connect/disconnect.
+- **Feature: Настройки конфиденциальности** — JSONB `privacy_settings` в users, API GET/PUT, UI на русском с 4 настройками.
+- **Feature: Read receipts privacy** — отключение отчётов о прочтении в настройках блокирует отправку read events.

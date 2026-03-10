@@ -73,6 +73,9 @@ CREATE TABLE IF NOT EXISTS voice_channel_participants (
 
 CREATE INDEX IF NOT EXISTS idx_vcp_channel ON voice_channel_participants(channel_id);
 CREATE INDEX IF NOT EXISTS idx_vcp_user ON voice_channel_participants(user_id);
+
+-- Privacy settings (JSONB column on users table)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_settings JSONB DEFAULT '{"lastSeen":"everyone","profilePhoto":"everyone","phoneNumber":"contacts","readReceipts":true}'::jsonb;
 `.trim();
 
 /**
@@ -100,6 +103,7 @@ export async function runStartupMigrations(): Promise<void> {
         'ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE',
         'ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ DEFAULT NULL',
         'ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned_by UUID DEFAULT NULL',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_settings JSONB DEFAULT \'{"lastSeen":"everyone","profilePhoto":"everyone","phoneNumber":"contacts","readReceipts":true}\'::jsonb',
     ];
 
     let autoMigrateOk = true;

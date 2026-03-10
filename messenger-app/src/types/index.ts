@@ -218,6 +218,7 @@ export interface PrivacySettings {
     lastSeen: 'everyone' | 'contacts' | 'nobody';
     profilePhoto: 'everyone' | 'contacts' | 'nobody';
     phoneNumber: 'everyone' | 'contacts' | 'nobody';
+    readReceipts: boolean;
 }
 
 // ---- Sticker Types ----
@@ -234,6 +235,18 @@ export interface Sticker {
     emoji: string;
     imageUrl: string;
     packId: string;
+}
+
+// ---- Read Receipt Types ----
+export interface ReadReceipt {
+    userId: string;
+    lastReadMessageId: string;
+    readAt: string;
+    user?: {
+        username: string;
+        firstName?: string;
+        avatar?: string;
+    };
 }
 
 // ---- Socket Events ----

@@ -173,7 +173,12 @@ export function initializeSocket(httpServer: HttpServer): Server {
             (socket as any).userInfo = userInfo;
         }
 
-        // Broadcast online status
+        // Update is_online in DB and broadcast
+        getSupabase()
+            .from('users')
+            .update({ is_online: true, last_seen: new Date().toISOString() })
+            .eq('id', userId)
+            .then(null, err => console.warn('Failed to update online status:', err));
         socket.broadcast.emit('user:online', { userId, isOnline: true });
 
         // --- Room management (manual join for newly created chats) ---
@@ -1027,7 +1032,13 @@ export function initializeSocket(httpServer: HttpServer): Server {
                 sockets.delete(socket.id);
                 if (sockets.size === 0) {
                     onlineUsers.delete(userId);
-                    socket.broadcast.emit('user:online', { userId, isOnline: false });
+                    // Update last_seen in DB
+                    getSupabase()
+                        .from('users')
+                        .update({ last_seen: new Date().toISOString(), is_online: false })
+                        .eq('id', userId)
+                        .then(null, err => console.warn('Failed to update last_seen:', err));
+                    socket.broadcast.emit('user:online', { userId, isOnline: false, lastSeen: new Date().toISOString() });
                 }
             }
         });

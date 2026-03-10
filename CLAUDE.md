@@ -47,8 +47,9 @@ npm run prisma:migrate    # Create and apply migrations
 - **Express 5** with TypeScript (run via `tsx watch`)
 - **Auth**: JWT access tokens (15 min) + refresh tokens (7 days); refresh does NOT rotate tokens (prevents race conditions)
 - **Routes**: `/api/auth/*`, `/api/chats/*`, `/api/friends/*`, `/api/users/*`, `/api/polls/*`, `/api/voice-channels/*` — defined in `server/routes/`
+- **Privacy**: `GET/PUT /api/users/me/privacy` — per-user privacy settings stored as JSONB in `users.privacy_settings`
 - **Middleware**: JWT verification in `server/middleware/auth.ts` (`authenticateToken`)
-- **Socket.io**: Full implementation in `server/socket/index.ts` — JWT auth on handshake, auto-join all chat rooms, typing, read receipts, online status
+- **Socket.io**: Full implementation in `server/socket/index.ts` — JWT auth on handshake, auto-join all chat rooms, typing, read receipts, online status, `last_seen`/`is_online` DB updates on connect/disconnect
 - **Telegram**: gram.js integration in `server/services/telegram.ts` for auth and message sync
 - **Validation**: Zod schemas on API endpoints (auth routes)
 
@@ -57,6 +58,8 @@ npm run prisma:migrate    # Create and apply migrations
 - **Prisma ORM** — schema at `messenger-app/prisma/schema.prisma`
 - Key tables: `users`, `chats`, `chat_participants`, `messages`, `message_reads`, `message_reactions`, `sessions`, `friend_requests`, `polls`, `poll_options`, `poll_votes`, `voice_channels`
 - Messages have `metadata JSONB` column for extensible data (location coords, contact info)
+- `users` table has `privacy_settings JSONB` column for per-user privacy (lastSeen, profilePhoto, phoneNumber visibility + readReceipts toggle)
+- `users` table has `is_online BOOLEAN` and `last_seen TIMESTAMPTZ` — updated by socket connect/disconnect
 
 ### Real-time
 - **Socket.io** server attached to HTTP server in `server/index.ts`
@@ -113,6 +116,10 @@ Configured in `messenger-app/.env`:
 - Telegram 2FA: `POST /api/auth/telegram/check-password` with `{ phoneNumber, password }`. Backend calls gram.js `computeCheck` for SRP password verification
 - Code splitting: route-level via `React.lazy()` in `App.tsx`, component-level in `ChatWindow.tsx` (PollCreator, GifPicker, GroupInfoPanel wrapped in `<Suspense>`), vendor chunks via `manualChunks` in `vite.config.ts`
 - Message list virtualization: `@tanstack/react-virtual` `useVirtualizer` in `ChatWindow.tsx` — flat `VirtualItemData[]` array (date-separator, unread-divider, message items), `measureElement` for dynamic heights, `overscan: 15`
+- Read receipts: Telegram-style ✓✓. Backend GET messages returns `status: 'read'` by checking `message_reads` table. Real-time via `message:read` socket event → `readReceipts` store + `markAsRead` marks all messages up to read point. Context menu shows "Прочитали" with avatar row (groups) or "Прочитано HH:MM" (private). `readReceipts` in chatStore: `Record<string, ReadReceipt[]>`
+- Privacy settings: `PrivacySettings` type has `lastSeen`, `profilePhoto`, `phoneNumber` (visibility) + `readReceipts` (boolean toggle). Stored in `users.privacy_settings` JSONB. Frontend syncs via `GET/PUT /api/users/me/privacy`. When `readReceipts: false`, client doesn't send read events
+- Last seen: Socket updates `users.last_seen` + `users.is_online` on connect/disconnect. Broadcast includes `lastSeen` timestamp
+- Context menu full-row: `onContextMenu` on outermost virtualizer item div (full viewport width), not just the bubble
 
 ## Backend Performance Patterns
 
@@ -124,6 +131,7 @@ Configured in `messenger-app/.env`:
 - **SELECT specific columns**: Never use `SELECT *` in production queries — always list only needed columns
 - **Static imports**: Use static `import { supabase }` instead of dynamic `await import()` for shared modules
 - **Database indexes**: Migration `007_performance_indexes.sql` adds indexes for all hot query paths — run it on any new Supabase instance
+- **Privacy migration**: Migration `008_privacy_settings.sql` adds `privacy_settings JSONB` column to `users` table. Auto-migration in `server/lib/migrate.ts`
 
 ## Security
 
@@ -173,3 +181,8 @@ Configured in `messenger-app/.env`:
 - **Call deafen**: `toggleDeafen()` in callStore automatically mutes the mic (`isMuted: true`). `PeerManager.setDeafened()` mutes all remote `audioElements`. Socket emits `call:toggle-deafen` → server broadcasts `call:deafen-changed`
 - **ActiveCallOverlay dock positions**: 'float' (draggable+resizable), 'left'/'right'/'top'/'bottom' (50% snap), 'fullscreen'. Drag to viewport edge auto-docks. Dock hint overlay (blue) shows during drag. Double-click title bar toggles fullscreen
 - **Opus SDP munging**: `mungeOpusSdp()` must be applied to BOTH local and remote SDP (before `setLocalDescription` and `setRemoteDescription`) in PeerManager and VoiceChannelPeerManager
+- **Read receipts race condition**: `loadMessages` and `getReadReceipts` must both complete before hydrating statuses. Use `Promise.all([loadMsgs, loadReceipts])` — if receipts arrive before messages, the hydration finds empty messages array
+- **Read receipts privacy**: When user disables `readReceipts` in settings, client must NOT call `markMessagesRead()` or `socketService.markRead()`. Check `useSettingsStore.getState().privacy.readReceipts` before sending
+- **Backend read status**: GET messages computes `status: 'read'` by querying `message_reads` for the chat, finding the latest read timestamp among all other users, and comparing each own message's timestamp. No longer hardcoded to `'sent'`
+- **Privacy settings JSONB**: `users.privacy_settings` column defaults to `{"lastSeen":"everyone","profilePhoto":"everyone","phoneNumber":"contacts","readReceipts":true}`. If column doesn't exist, run migration `008_privacy_settings.sql`
+- **Context menu readBy**: `readReceipts` in chatStore is reactive (subscribed via `useChatStore((s) => s.readReceipts)`). Context menu computes `readBy` by filtering receipts where `lastReadMessageId` timestamp >= context message timestamp

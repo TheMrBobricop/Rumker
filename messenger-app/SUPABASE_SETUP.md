@@ -25,8 +25,11 @@
 #### Способ A: Через SQL Editor
 1. Перейди в **SQL Editor**
 2. Нажми "New query"
-3. Скопируй и вставь содержимое файла: `supabase/migrations/001_initial_schema.sql`
-4. Нажми "Run" для выполнения
+3. Скопируй и вставь содержимое файлов миграций по порядку:
+   - `supabase/migrations/001_initial_schema.sql`
+   - `supabase/migrations/007_performance_indexes.sql`
+   - `supabase/migrations/008_privacy_settings.sql`
+4. Нажми "Run" для выполнения каждой миграции
 
 #### Способ B: Через Prisma (рекомендуется)
 ```bash

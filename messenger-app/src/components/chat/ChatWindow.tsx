@@ -16,11 +16,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { MessageBubble } from './MessageBubble';
 import { MessageInput } from './MessageInput';
-import { MessageContextMenu } from './MessageContextMenu';
+import { MessageContextMenu, type ReadByUser } from './MessageContextMenu';
 import { PinnedMessageBar } from './PinnedMessageBar';
 import { ContactPicker } from './ContactPicker';
 import { UserProfilePanel } from '@/components/users/UserProfilePanel';
-import { uploadChatFile, markMessagesRead, pinMessage as apiPinMessage, unpinMessage as apiUnpinMessage, unpinAllMessages as apiUnpinAll, searchMessages, deleteChat as apiDeleteChat } from '@/lib/api/chats';
+import { uploadChatFile, markMessagesRead, pinMessage as apiPinMessage, unpinMessage as apiUnpinMessage, unpinAllMessages as apiUnpinAll, searchMessages, deleteChat as apiDeleteChat, getReadReceipts } from '@/lib/api/chats';
 import { createPoll } from '@/lib/api/polls';
 import { socketService } from '@/lib/socket';
 import { useCallStore } from '@/stores/callStore';
@@ -56,6 +56,7 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
     const isLoadingMore = useChatStore((s) => s.isLoadingMore);
     const hasMore = useChatStore((s) => s.hasMore);
     const typingUsers = useChatStore((s) => s.typingUsers);
+    const readReceipts = useChatStore((s) => s.readReceipts);
     const currentUser = useAuthStore((s) => s.user);
 
     // Ref to save unread state BEFORE clearUnread zeroes it — used for divider & badge
@@ -199,9 +200,38 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                 initialUnreadRef.current = null;
             }
 
-            chatState.loadMessages(activeChat.id).finally(() => {
-                loadedChatsRef.current.add(activeChat.id);
+            const chatId = activeChat.id;
+            // Load messages and read receipts in parallel, then hydrate statuses
+            const loadMsgsPromise = chatState.loadMessages(chatId).finally(() => {
+                loadedChatsRef.current.add(chatId);
             });
+            const loadReceiptsPromise = getReadReceipts(chatId).catch(() => [] as import('@/types').ReadReceipt[]);
+
+            // Wait for both, then hydrate
+            Promise.all([loadMsgsPromise, loadReceiptsPromise]).then(([, receipts]) => {
+                useChatStore.getState().setReadReceipts(chatId, receipts);
+                if (receipts.length > 0) {
+                    const msgs = useChatStore.getState().messages[chatId] || [];
+                    const myId = useAuthStore.getState().user?.id;
+                    const readMsgIds = receipts.map(r => r.lastReadMessageId);
+                    const readTimestamps = msgs
+                        .filter(m => readMsgIds.includes(m.id))
+                        .map(m => new Date(m.timestamp).getTime());
+                    const latestReadTs = Math.max(...readTimestamps, 0);
+                    if (latestReadTs > 0 && myId) {
+                        const updated = msgs.map(m => {
+                            if (m.senderId === myId && m.status === 'sent' && new Date(m.timestamp).getTime() <= latestReadTs) {
+                                return { ...m, status: 'read' as const };
+                            }
+                            return m;
+                        });
+                        if (updated.some((m, i) => m !== msgs[i])) {
+                            useChatStore.getState().setMessages(chatId, updated);
+                        }
+                    }
+                }
+            });
+
             chatState.clearUnread(activeChat.id);
             // Load pinned messages from centralized store
             setPinnedBarDismissed(false);
@@ -217,8 +247,12 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
         if (chatMessages && chatMessages.length > 0) {
             const lastMsg = chatMessages[chatMessages.length - 1];
             if (lastMsg.senderId !== currentUser?.id) {
-                markMessagesRead(activeChat.id, lastMsg.id).catch(() => {});
-                socketService.markRead(activeChat.id, lastMsg.id);
+                // Respect readReceipts privacy setting
+                const privacyEnabled = useSettingsStore.getState().privacy.readReceipts;
+                if (privacyEnabled) {
+                    markMessagesRead(activeChat.id, lastMsg.id).catch(() => {});
+                    socketService.markRead(activeChat.id, lastMsg.id);
+                }
             }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1424,6 +1458,10 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                                         <div
                                             key={item.key}
                                             id={item.kind === 'message' ? `msg-${item.msg.id}` : undefined}
+                                            onContextMenu={item.kind === 'message' ? (e) => {
+                                                e.preventDefault();
+                                                handleContextMenu(e, item.msg);
+                                            } : undefined}
                                         >
                                             {item.kind === 'date-separator' && (
                                                 <div className="flex items-center justify-center py-2 z-10 px-3 sm:px-4">
@@ -1454,6 +1492,10 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                                                         onClick={() => handleMessageRowClick(item.msg)}
                                                         onMouseDown={() => handleMsgMouseDown(item.msg.id)}
                                                         onMouseEnter={() => handleMsgMouseEnter(item.msg.id)}
+                                                        onContextMenu={(e) => {
+                                                            e.preventDefault();
+                                                            handleContextMenu(e, item.msg);
+                                                        }}
                                                     >
                                                         {/* Selection highlight overlay */}
                                                         {item.isSelected && (
@@ -1594,27 +1636,50 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
             </div>
 
             {/* Context Menu */}
-            {contextMenu && (
-                <MessageContextMenu
-                    x={contextMenu.x}
-                    y={contextMenu.y}
-                    message={contextMenu.message}
-                    isMe={contextMenu.message.senderId === currentUser?.id}
-                    onClose={() => setContextMenu(null)}
-                    onReply={handleReply}
-                    onCopy={handleCopy}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                    onReaction={handleReaction}
-                    onForward={handleForwardFromMenu}
-                    onSelect={handleSelectFromMenu}
-                    onPin={handlePinMessage}
-                    onUnpin={handleUnpinMessage}
-                    isPinned={pinnedMessages.some(p => p.id === contextMenu.message.id)}
-                    canDeleteOthers={canDeleteOthers}
-                    canPin={canPinMessages}
-                />
-            )}
+            {contextMenu && (() => {
+                const isCtxMe = contextMenu.message.senderId === currentUser?.id;
+                let readByUsers: ReadByUser[] | undefined;
+                if (isCtxMe && activeChat) {
+                    const receipts = readReceipts[activeChat.id] || [];
+                    const chatMessages = messages[activeChat.id] || [];
+                    const ctxMsgTs = new Date(contextMenu.message.timestamp).getTime();
+                    readByUsers = receipts
+                        .filter(r => {
+                            const readMsg = chatMessages.find(m => m.id === r.lastReadMessageId);
+                            return readMsg && new Date(readMsg.timestamp).getTime() >= ctxMsgTs;
+                        })
+                        .map(r => ({
+                            userId: r.userId,
+                            username: r.user?.username || '',
+                            firstName: r.user?.firstName,
+                            avatar: r.user?.avatar,
+                            readAt: r.readAt,
+                        }));
+                }
+                return (
+                    <MessageContextMenu
+                        x={contextMenu.x}
+                        y={contextMenu.y}
+                        message={contextMenu.message}
+                        isMe={isCtxMe}
+                        onClose={() => setContextMenu(null)}
+                        onReply={handleReply}
+                        onCopy={handleCopy}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                        onReaction={handleReaction}
+                        onForward={handleForwardFromMenu}
+                        onSelect={handleSelectFromMenu}
+                        onPin={handlePinMessage}
+                        onUnpin={handleUnpinMessage}
+                        isPinned={pinnedMessages.some(p => p.id === contextMenu.message.id)}
+                        canDeleteOthers={canDeleteOthers}
+                        canPin={canPinMessages}
+                        readBy={readByUsers}
+                        isPrivateChat={activeChat?.type === 'private'}
+                    />
+                );
+            })()}
 
             {/* Delete Chat Confirmation */}
             {showDeleteConfirm && (

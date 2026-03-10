@@ -252,4 +252,50 @@ router.patch('/me/profile', authenticateToken, validateBody(updateProfileSchema)
     }
 });
 
+// Get privacy settings
+router.get('/me/privacy', authenticateToken, async (req: AuthRequest, res) => {
+    try {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('privacy_settings')
+            .eq('id', req.user?.userId)
+            .single();
+
+        if (error || !user) {
+            return res.json({
+                lastSeen: 'everyone',
+                profilePhoto: 'everyone',
+                phoneNumber: 'contacts',
+                readReceipts: true,
+            });
+        }
+
+        const defaults = { lastSeen: 'everyone', profilePhoto: 'everyone', phoneNumber: 'contacts', readReceipts: true };
+        res.json({ ...(defaults as any), ...(user.privacy_settings || {}) });
+    } catch {
+        res.json({ lastSeen: 'everyone', profilePhoto: 'everyone', phoneNumber: 'contacts', readReceipts: true });
+    }
+});
+
+// Update privacy settings
+router.put('/me/privacy', authenticateToken, async (req: AuthRequest, res) => {
+    try {
+        const settings = req.body;
+        const { error } = await supabase
+            .from('users')
+            .update({ privacy_settings: settings })
+            .eq('id', req.user?.userId);
+
+        if (error) {
+            console.error('Update privacy error:', error);
+            return res.status(500).json({ error: 'Failed to update privacy settings' });
+        }
+
+        res.json({ success: true, ...settings });
+    } catch (error) {
+        console.error('Update privacy error:', error);
+        res.status(500).json({ error: 'Failed to update privacy settings' });
+    }
+});
+
 export default router;

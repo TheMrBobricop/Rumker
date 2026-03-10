@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Chat, Message } from '@/types';
+import type { Chat, Message, ReadReceipt } from '@/types';
 import { getChats, getMessages, sendMessage as apiSendMessage, editMessage as apiEditMessage, deleteMessage as apiDeleteMessage, pinChat as apiPinChat, unpinChat as apiUnpinChat, muteChat as apiMuteChat, unmuteChat as apiUnmuteChat, clearChat as apiClearChat, deleteChat as apiDeleteChat, toggleReaction as apiToggleReaction, getPinnedMessages } from '@/lib/api/chats';
 import { useAuthStore } from './authStore';
 
@@ -22,6 +22,7 @@ interface ChatStore {
     typingUsers: Record<string, string[]>; // chatId -> userId[]
     pinnedMessages: Record<string, Message[]>; // chatId -> Message[]
     lastReadMessageId: Record<string, string>; // chatId -> messageId
+    readReceipts: Record<string, ReadReceipt[]>; // chatId -> receipts from other users
 
     // Actions
     setChats: (chats: Chat[]) => void;
@@ -38,6 +39,8 @@ interface ChatStore {
     toggleReaction: (chatId: string, messageId: string, emoji: string, userId: string) => Promise<void>;
     setMessages: (chatId: string, messages: Message[]) => void;
     markAsRead: (chatId: string, messageId: string) => void;
+    updateReadReceipt: (chatId: string, userId: string, messageId: string) => void;
+    setReadReceipts: (chatId: string, receipts: ReadReceipt[]) => void;
     setSearchQuery: (query: string) => void;
     setLoading: (loading: boolean) => void;
     addTypingUser: (chatId: string, userId: string) => void;
@@ -80,6 +83,7 @@ export const useChatStore = create<ChatStore>()(persist((set, get) => ({
     typingUsers: {},
     pinnedMessages: {},
     lastReadMessageId: {},
+    readReceipts: {},
 
     // Actions
     setChats: (chats) => set({ chats }),
@@ -442,12 +446,18 @@ export const useChatStore = create<ChatStore>()(persist((set, get) => ({
     markAsRead: (chatId, messageId) =>
         set((state) => {
             const chatMessages = state.messages[chatId] || [];
+            const readMsg = chatMessages.find(m => m.id === messageId);
+            const readTimestamp = readMsg ? new Date(readMsg.timestamp).getTime() : 0;
             return {
                 messages: {
                     ...state.messages,
-                    [chatId]: chatMessages.map((m) =>
-                        m.id === messageId ? { ...m, status: 'read' as const } : m
-                    ),
+                    [chatId]: chatMessages.map((m) => {
+                        // Mark all messages with status 'sent' up to readMsg timestamp as 'read'
+                        if (m.status === 'sent' && readTimestamp && new Date(m.timestamp).getTime() <= readTimestamp) {
+                            return { ...m, status: 'read' as const };
+                        }
+                        return m.id === messageId ? { ...m, status: 'read' as const } : m;
+                    }),
                 },
                 lastReadMessageId: {
                     ...state.lastReadMessageId,
@@ -455,6 +465,29 @@ export const useChatStore = create<ChatStore>()(persist((set, get) => ({
                 },
             };
         }),
+
+    updateReadReceipt: (chatId, userId, messageId) =>
+        set((state) => {
+            const existing = state.readReceipts[chatId] || [];
+            const idx = existing.findIndex(r => r.userId === userId);
+            const receipt: ReadReceipt = {
+                userId,
+                lastReadMessageId: messageId,
+                readAt: new Date().toISOString(),
+                user: existing[idx]?.user,
+            };
+            const updated = idx >= 0
+                ? existing.map((r, i) => i === idx ? receipt : r)
+                : [...existing, receipt];
+            return {
+                readReceipts: { ...state.readReceipts, [chatId]: updated },
+            };
+        }),
+
+    setReadReceipts: (chatId, receipts) =>
+        set((state) => ({
+            readReceipts: { ...state.readReceipts, [chatId]: receipts },
+        })),
 
     setSearchQuery: (searchQuery) => set({ searchQuery }),
 
@@ -732,6 +765,7 @@ export const useChatStore = create<ChatStore>()(persist((set, get) => ({
         typingUsers: {},
         pinnedMessages: {},
         lastReadMessageId: {},
+        readReceipts: {},
     }),
 }), {
     name: 'chat-storage',

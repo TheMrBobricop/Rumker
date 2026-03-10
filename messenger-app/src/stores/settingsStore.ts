@@ -99,6 +99,7 @@ const defaultPrivacy: PrivacySettings = {
     lastSeen: 'everyone',
     profilePhoto: 'everyone',
     phoneNumber: 'contacts',
+    readReceipts: true,
 };
 
 export const useSettingsStore = create<SettingsStore>()(

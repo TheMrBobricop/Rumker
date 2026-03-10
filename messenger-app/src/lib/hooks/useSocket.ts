@@ -101,6 +101,7 @@ export function useSocket() {
         socketService.onMessageRead((data) => {
             if (data.userId !== getMyId()) {
                 useChatStore.getState().markAsRead(data.chatId, data.messageId);
+                useChatStore.getState().updateReadReceipt(data.chatId, data.userId, data.messageId);
             }
         });
 

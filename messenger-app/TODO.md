@@ -1,6 +1,6 @@
 # Rumker Messenger — Детальный TODO
 
-Последнее обновление: 03.03.2026
+Последнее обновление: 06.03.2026
 
 ---
 
@@ -79,8 +79,8 @@
 - [ ] **Forward dialog** — выбрать чат и переслать сообщение (UI частично есть)
 - [x] **Реакции** — emoji picker + toggle API + Socket.io broadcast + optimistic update
 - [ ] **Стикеры** — панель стикер-паков, отправка, импорт из Telegram
-- [ ] **Прочтение сообщений** — двойная галочка (доставлено → прочитано)
-- [ ] **Статусы доставки** — sent → delivered → read (сейчас только sent/read)
+- [x] **Прочтение сообщений** — Telegram-style ✓✓, persistent через message_reads, бэкенд возвращает `status: 'read'`
+- [x] **Статусы доставки** — sent → read (бэкенд вычисляет из message_reads при загрузке сообщений)
 - [x] **GIF-пикер** — интеграция с Tenor API, поиск, категории, masonry grid
 - [ ] **Thread/Topic UI** — ветки и подветки для каналов (Telegram-style)
 - [x] **Telegram-style меню вложений** — popup-меню скрепки с 7 пунктами
@@ -185,7 +185,7 @@
 - [x] Мгновенная доставка сообщений
 - [x] Typing indicators
 - [x] Online/Offline статусы
-- [x] Read receipts
+- [x] Read receipts (Telegram-style ✓✓, persistent, real-time, контекстное меню "кто прочитал")
 - [x] Звуковые уведомления
 
 ### UI
@@ -289,3 +289,17 @@
 - [x] Профиль пользователя не закрывался при смене чата — `prevActiveChatRef` обновлялся до проверки условия. Перенесено присвоение после проверки
 - [x] Картинка обрезалась в MediaViewer — заменён `max-h-[calc(100vh-140px)]` на `max-h-[calc(100dvh-60px)]` + добавлены `w-auto h-auto`
 - [x] Сообщения начинались сверху — добавлен `flex flex-col justify-end` + `minHeight: 100%` на обёртку сообщений
+
+### Read receipts + Конфиденциальность (06.03.2026)
+- [x] Telegram-style read receipts — бэкенд GET messages возвращает `status: 'read'` через проверку message_reads
+- [x] markAsRead помечает ВСЕ сообщения до точки прочтения (не только одно)
+- [x] readReceipts store — `Record<string, ReadReceipt[]>`, updateReadReceipt, setReadReceipts
+- [x] Real-time read receipts — socket `message:read` event обновляет readReceipts store + markAsRead
+- [x] Гидрация статусов при загрузке чата — Promise.all([loadMessages, getReadReceipts])
+- [x] "Кто прочитал" в контекстном меню — аватарки в ряд (группы), "Прочитано HH:MM" (ЛС), клик раскрывает список
+- [x] Контекстное меню на всю строку — onContextMenu на outermost virtualizer div
+- [x] Last seen tracking — socket обновляет users.last_seen + is_online при connect/disconnect
+- [x] Privacy settings API — GET/PUT `/api/users/me/privacy`, JSONB колонка `privacy_settings`
+- [x] Privacy settings UI — русский язык, 3 Select + 1 Switch (отчёты о прочтении)
+- [x] Read receipts privacy — отключение блокирует отправку read events
+- [x] Миграция 008_privacy_settings.sql — ALTER TABLE users ADD COLUMN privacy_settings JSONB

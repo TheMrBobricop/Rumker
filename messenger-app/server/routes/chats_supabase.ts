@@ -697,6 +697,39 @@ router.get('/:chatId/messages', authenticateToken, async (req: AuthRequest, res)
             }
         }
 
+        // Fetch read receipts for this chat to determine message read status
+        const { data: readReceipts } = await supabase
+            .from('message_reads')
+            .select('user_id, last_read_message_id')
+            .eq('chat_id', chatId)
+            .neq('user_id', userId);
+
+        // Build a set of read message timestamps — a message is "read" if any other user's
+        // last_read_message has a timestamp >= this message's timestamp
+        const readReceiptTimestamps: number[] = [];
+        if (readReceipts && readReceipts.length > 0) {
+            const readMsgIds = readReceipts.map(r => r.last_read_message_id).filter(Boolean);
+            for (const msg of messages || []) {
+                if (readMsgIds.includes(msg.id)) {
+                    readReceiptTimestamps.push(new Date(msg.created_at).getTime());
+                }
+            }
+            // If some read messages are not in the current page, fetch their timestamps
+            const missingReadIds = readMsgIds.filter(id => !(messages || []).some((m: any) => m.id === id));
+            if (missingReadIds.length > 0) {
+                const { data: missingReadMsgs } = await supabase
+                    .from('messages')
+                    .select('id, created_at')
+                    .in('id', missingReadIds);
+                if (missingReadMsgs) {
+                    for (const m of missingReadMsgs) {
+                        readReceiptTimestamps.push(new Date(m.created_at).getTime());
+                    }
+                }
+            }
+        }
+        const latestReadTs = readReceiptTimestamps.length > 0 ? Math.max(...readReceiptTimestamps) : 0;
+
         // Форматируем под фронтенд Message type
         const formattedMessages = await Promise.all((messages || []).map(async (msg: any) => {
             let replyToMessage = undefined;
@@ -723,7 +756,7 @@ router.get('/:chatId/messages', authenticateToken, async (req: AuthRequest, res)
                 replyTo: msg.reply_to_id,
                 replyToMessage,
                 timestamp: msg.created_at,
-                status: 'sent',
+                status: (msg.sender_id === userId && latestReadTs > 0 && new Date(msg.created_at).getTime() <= latestReadTs) ? 'read' : 'sent',
                 isEdited: msg.updated_at !== msg.created_at,
                 isPinned: false,
                 metadata: msg.metadata || undefined,
@@ -1575,6 +1608,57 @@ router.delete('/:chatId', authenticateToken, async (req: AuthRequest, res) => {
     } catch (error) {
         console.error('Delete chat error:', error);
         res.status(500).json({ error: 'Failed to delete chat' });
+    }
+});
+
+// Get read receipts for a chat (excluding current user)
+router.get('/:chatId/read-receipts', authenticateToken, async (req: AuthRequest, res) => {
+    const { chatId } = req.params;
+    const userId = req.user?.userId;
+
+    try {
+        const { data: reads, error } = await supabase
+            .from('message_reads')
+            .select('user_id, last_read_message_id, read_at')
+            .eq('chat_id', chatId)
+            .neq('user_id', userId);
+
+        if (error) {
+            console.warn('Read receipts fetch error:', error.message);
+            return res.json([]);
+        }
+
+        if (!reads || reads.length === 0) {
+            return res.json([]);
+        }
+
+        // Fetch user info for each reader
+        const userIds = reads.map(r => r.user_id);
+        const { data: users } = await supabase
+            .from('users')
+            .select('id, username, first_name, avatar')
+            .in('id', userIds);
+
+        const userMap = new Map((users || []).map(u => [u.id, u]));
+
+        const receipts = reads.map(r => {
+            const u = userMap.get(r.user_id);
+            return {
+                userId: r.user_id,
+                lastReadMessageId: r.last_read_message_id,
+                readAt: r.read_at,
+                user: u ? {
+                    username: u.username,
+                    firstName: u.first_name,
+                    avatar: u.avatar,
+                } : undefined,
+            };
+        });
+
+        res.json(receipts);
+    } catch (error) {
+        console.error('Read receipts error:', error);
+        res.json([]);
     }
 });
 

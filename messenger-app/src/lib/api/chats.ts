@@ -1,6 +1,6 @@
 // Chat API functions
 import { api } from './client';
-import type { Chat, Message } from '@/types';
+import type { Chat, Message, ReadReceipt } from '@/types';
 
 export interface CreateChatData {
     type: 'private' | 'group' | 'channel';
@@ -76,6 +76,11 @@ export async function deleteMessage(chatId: string, messageId: string): Promise<
 // Upload a file for chat media
 export async function uploadChatFile(file: File): Promise<UploadResult> {
     return api.uploadFile('/upload', file) as Promise<UploadResult>;
+}
+
+// Get read receipts for a chat
+export async function getReadReceipts(chatId: string): Promise<ReadReceipt[]> {
+    return api.get<ReadReceipt[]>(`/chats/${chatId}/read-receipts`);
 }
 
 // Mark messages as read
