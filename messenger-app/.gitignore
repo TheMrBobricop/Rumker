@@ -20,6 +20,14 @@ uploads/
 dist-ssr
 *.local
 
+# ML models (too large for GitHub)
+ltx-2/
+wan2.2-t2v-a14b/
+sdxl-turbo/
+*.safetensors
+*.pth
+*.ckpt
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
