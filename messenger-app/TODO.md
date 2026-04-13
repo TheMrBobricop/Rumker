@@ -6,6 +6,13 @@
 
 ## Исправления 13.04.2026
 
+- [x] **Vercel deploy (фронтенд)** — добавлен `vercel.json` с `rewrites` для SPA (React Router). Настройки в Vercel Dashboard:
+  - Root Directory: `messenger-app`
+  - Build Command: `npm run build`
+  - Output Directory: `dist`
+  - Framework Preset: `Vite`
+  - **Важно**: Vercel деплоит только фронтенд. Бэкенд (Express + Socket.io) требует отдельный сервер (Railway/Render/VPS)
+- [x] **Git repo cleanup** — удалены ML модели (`ltx-2/`, `wan2.2-t2v-a14b/`, `sdxl-turbo/`, ~5.8GB LFS) и `.env` из git-истории через `git-filter-repo`. Добавлены в `.gitignore`. Размер `.git` уменьшился с 5.4GB до ~1MB. Удалены Windsurf worktree с повреждённым git-объектом
 - [x] **TypeScript build fix (25 ошибок)** — билд падал из-за TS ошибок:
   - `useAnimatedMount.ts` — убран неиспользуемый `useCallback` импорт, добавлен `undefined` аргумент в `useRef<>()` (React 19 требует явный initial value)
   - `ActiveCallOverlay.tsx` — убрана неиспользуемая переменная `overlayAnimClass`, добавлен `!activeCall` null guard после `if (!mounted)` return
