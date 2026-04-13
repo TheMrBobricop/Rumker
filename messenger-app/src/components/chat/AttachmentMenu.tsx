@@ -1,6 +1,7 @@
-import { useRef, useEffect } from 'react';
+﻿import { useRef, useEffect } from 'react';
 import { Image, FileText, BarChart3, MapPin, Contact, Smile } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAnimatedMount, ANIM_ATTACHMENT } from '@/lib/hooks/useAnimatedMount';
 
 interface AttachmentMenuItem {
     icon: React.ReactNode;
@@ -33,6 +34,7 @@ export function AttachmentMenu({
     onSticker,
 }: AttachmentMenuProps) {
     const menuRef = useRef<HTMLDivElement>(null);
+    const { mounted, className: animClass } = useAnimatedMount(open, ANIM_ATTACHMENT);
 
     useEffect(() => {
         if (!open) return;
@@ -51,7 +53,7 @@ export function AttachmentMenu({
         };
     }, [open, onClose]);
 
-    if (!open) return null;
+    if (!mounted) return null;
 
     const items: AttachmentMenuItem[] = [
         {
@@ -101,7 +103,7 @@ export function AttachmentMenu({
     return (
         <div
             ref={menuRef}
-            className="absolute bottom-full left-0 mb-2 z-50 animate-attachment-menu-in"
+            className={`absolute bottom-full left-0 mb-2 z-50 ${animClass}`}
         >
             <div className="bg-card/95 backdrop-blur-md rounded-2xl shadow-xl border border-border overflow-hidden p-2 min-w-[200px]">
                 {items.map((item, index) => (

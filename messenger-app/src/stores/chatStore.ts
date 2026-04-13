@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Chat, Message, ReadReceipt } from '@/types';
 import { getChats, getMessages, sendMessage as apiSendMessage, editMessage as apiEditMessage, deleteMessage as apiDeleteMessage, pinChat as apiPinChat, unpinChat as apiUnpinChat, muteChat as apiMuteChat, unmuteChat as apiUnmuteChat, clearChat as apiClearChat, deleteChat as apiDeleteChat, toggleReaction as apiToggleReaction, getPinnedMessages } from '@/lib/api/chats';
@@ -7,6 +7,14 @@ import { useAuthStore } from './authStore';
 let tempIdCounter = 0;
 function generateTempId() {
     return `__temp_${Date.now()}_${++tempIdCounter}`;
+}
+
+function sortPinned(messages: Message[]) {
+    return [...messages].sort((a, b) => {
+        const aTime = new Date(a.pinnedAt ?? a.timestamp).getTime();
+        const bTime = new Date(b.pinnedAt ?? b.timestamp).getTime();
+        return bTime - aTime;
+    });
 }
 
 interface ChatStore {
@@ -63,6 +71,13 @@ interface ChatStore {
     updateParticipantRole: (chatId: string, userId: string, role: string, title?: string, adminRights?: any) => void;
     updateParticipantTitle: (chatId: string, userId: string, title: string | null) => void;
     removeParticipant: (chatId: string, userId: string) => void;
+    // Resend failed message
+    resendMessage: (chatId: string, tempId: string) => Promise<void>;
+    // Search: jump to message
+    scrollToMessageId: string | null;
+    setScrollToMessageId: (id: string | null) => void;
+    // Loading state
+    hasLoadedOnce: boolean;
     // Chat info
     updateChatInfo: (chatId: string, updates: { title?: string; description?: string | null; avatar?: string | null }) => void;
     reset: () => void;
@@ -84,6 +99,8 @@ export const useChatStore = create<ChatStore>()(persist((set, get) => ({
     pinnedMessages: {},
     lastReadMessageId: {},
     readReceipts: {},
+    scrollToMessageId: null,
+    hasLoadedOnce: false,
 
     // Actions
     setChats: (chats) => set({ chats }),
@@ -104,11 +121,11 @@ export const useChatStore = create<ChatStore>()(persist((set, get) => ({
             // (protects against partial backend failures returning [])
             const currentChats = get().chats;
             if (freshChats.length === 0 && currentChats.length > 0) {
-                console.warn('[ChatStore] API returned 0 chats but user had', currentChats.length, '— keeping existing');
+                console.warn('[ChatStore] API returned 0 chats but user had', currentChats.length, '- keeping existing');
                 set({ isLoading: false });
                 return;
             }
-            set({ chats: freshChats, isLoading: false });
+            set({ chats: freshChats, isLoading: false, hasLoadedOnce: true });
         } catch (error) {
             console.error('Failed to load chats:', error);
             set({ isLoading: false });
@@ -246,7 +263,7 @@ export const useChatStore = create<ChatStore>()(persist((set, get) => ({
         }));
 
         try {
-            // Send message via REST API — saves to DB and emits socket event
+            // Send message via REST API пїЅ saves to DB and emits socket event
             const realMessage = await apiSendMessage({
                 chatId,
                 content,
@@ -267,18 +284,18 @@ export const useChatStore = create<ChatStore>()(persist((set, get) => ({
 
                 let updatedMsgs: typeof msgs;
                 if (hasTemp && hasReal) {
-                    // Both exist (socket added real while temp still present) — remove temp, update real
+                    // Both exist (socket added real while temp still present) пїЅ remove temp, update real
                     updatedMsgs = msgs
                         .filter((m) => m.id !== tempId)
                         .map((m) => m.id === realMessage.id ? realWithStatus : m);
                 } else if (hasTemp) {
-                    // Normal case — replace temp with real
+                    // Normal case пїЅ replace temp with real
                     updatedMsgs = msgs.map((m) => m.id === tempId ? realWithStatus : m);
                 } else if (hasReal) {
-                    // Temp removed (e.g. by loadMessages), socket added real — just update status
+                    // Temp removed (e.g. by loadMessages), socket added real пїЅ just update status
                     updatedMsgs = msgs.map((m) => m.id === realMessage.id ? realWithStatus : m);
                 } else {
-                    // Neither exists — add real message
+                    // Neither exists пїЅ add real message
                     updatedMsgs = [...msgs, realWithStatus];
                 }
 
@@ -306,6 +323,56 @@ export const useChatStore = create<ChatStore>()(persist((set, get) => ({
             throw error;
         }
     },
+
+    resendMessage: async (chatId: string, tempId: string) => {
+        const state = get();
+        const msgs = state.messages[chatId] || [];
+        const failedMsg = msgs.find(m => m.id === tempId && m.status === 'error');
+        if (!failedMsg) return;
+
+        // Reset status to sending
+        set((s) => ({
+            messages: {
+                ...s.messages,
+                [chatId]: (s.messages[chatId] || []).map(m =>
+                    m.id === tempId ? { ...m, status: 'sending' as const } : m
+                ),
+            },
+        }));
+
+        try {
+            const realMessage = await apiSendMessage({
+                chatId,
+                content: failedMsg.content,
+                type: (failedMsg.type || 'text') as 'text' | 'image' | 'video' | 'voice' | 'file' | 'location' | 'contact',
+                fileUrl: failedMsg.mediaUrl,
+                replyToId: failedMsg.replyTo,
+                forwardedFromId: failedMsg.forwardedFrom?.id,
+                forwardedFromName: failedMsg.forwardedFrom?.name,
+            });
+
+            const realWithStatus = { ...realMessage, status: 'sent' as const };
+            set((s) => ({
+                messages: {
+                    ...s.messages,
+                    [chatId]: (s.messages[chatId] || [])
+                        .filter(m => m.id !== tempId && m.id !== realMessage.id)
+                        .concat(realWithStatus),
+                },
+            }));
+        } catch {
+            set((s) => ({
+                messages: {
+                    ...s.messages,
+                    [chatId]: (s.messages[chatId] || []).map(m =>
+                        m.id === tempId ? { ...m, status: 'error' as const } : m
+                    ),
+                },
+            }));
+        }
+    },
+
+    setScrollToMessageId: (id) => set({ scrollToMessageId: id }),
 
     updateMessage: (message) =>
         set((state) => {
@@ -543,56 +610,90 @@ export const useChatStore = create<ChatStore>()(persist((set, get) => ({
         set((state) => {
             const current = state.pinnedMessages[chatId] || [];
             if (current.some(m => m.id === message.id)) return state;
+            const nextPinned = sortPinned([...current, message]);
+            const chatMessages = state.messages[chatId] || [];
+            const nextMessages = chatMessages.map((m) =>
+                m.id === message.id ? { ...m, isPinned: true, pinnedAt: message.pinnedAt, pinnedBy: message.pinnedBy } : m
+            );
             return {
                 pinnedMessages: {
                     ...state.pinnedMessages,
-                    [chatId]: [...current, message],
+                    [chatId]: nextPinned,
+                },
+                messages: {
+                    ...state.messages,
+                    [chatId]: nextMessages,
                 },
             };
         }),
 
     removePinnedMessage: (chatId, messageId) =>
-        set((state) => ({
-            pinnedMessages: {
-                ...state.pinnedMessages,
-                [chatId]: (state.pinnedMessages[chatId] || []).filter(m => m.id !== messageId),
-            },
-        })),
+        set((state) => {
+            const nextPinned = (state.pinnedMessages[chatId] || []).filter(m => m.id !== messageId);
+            const chatMessages = state.messages[chatId] || [];
+            const nextMessages = chatMessages.map((m) =>
+                m.id === messageId ? { ...m, isPinned: false, pinnedAt: undefined, pinnedBy: undefined } : m
+            );
+            return {
+                pinnedMessages: {
+                    ...state.pinnedMessages,
+                    [chatId]: nextPinned,
+                },
+                messages: {
+                    ...state.messages,
+                    [chatId]: nextMessages,
+                },
+            };
+        }),
 
     setPinnedMessages: (chatId, messages) =>
-        set((state) => ({
-            pinnedMessages: {
-                ...state.pinnedMessages,
-                [chatId]: messages,
-            },
-        })),
+        set((state) => {
+            const nextPinned = sortPinned(messages);
+            const pinnedMap = new Map(nextPinned.map((m) => [m.id, m]));
+            const chatMessages = state.messages[chatId] || [];
+            const nextMessages = chatMessages.map((m) =>
+                pinnedMap.has(m.id)
+                    ? { ...m, isPinned: true, pinnedAt: pinnedMap.get(m.id)?.pinnedAt, pinnedBy: pinnedMap.get(m.id)?.pinnedBy }
+                    : (m.isPinned ? { ...m, isPinned: false, pinnedAt: undefined, pinnedBy: undefined } : m)
+            );
+            return {
+                pinnedMessages: {
+                    ...state.pinnedMessages,
+                    [chatId]: nextPinned,
+                },
+                messages: {
+                    ...state.messages,
+                    [chatId]: nextMessages,
+                },
+            };
+        }),
 
     loadPinnedMessages: async (chatId: string) => {
         try {
             const messages = await getPinnedMessages(chatId);
-            set((state) => ({
-                pinnedMessages: {
-                    ...state.pinnedMessages,
-                    [chatId]: messages,
-                },
-            }));
+            get().setPinnedMessages(chatId, messages);
         } catch {
-            set((state) => ({
-                pinnedMessages: {
-                    ...state.pinnedMessages,
-                    [chatId]: [],
-                },
-            }));
+            get().setPinnedMessages(chatId, []);
         }
     },
 
     clearPinnedMessages: (chatId) =>
-        set((state) => ({
-            pinnedMessages: {
-                ...state.pinnedMessages,
-                [chatId]: [],
-            },
-        })),
+        set((state) => {
+            const chatMessages = state.messages[chatId] || [];
+            const nextMessages = chatMessages.map((m) =>
+                m.isPinned ? { ...m, isPinned: false, pinnedAt: undefined, pinnedBy: undefined } : m
+            );
+            return {
+                pinnedMessages: {
+                    ...state.pinnedMessages,
+                    [chatId]: [],
+                },
+                messages: {
+                    ...state.messages,
+                    [chatId]: nextMessages,
+                },
+            };
+        }),
 
     togglePinChat: async (chatId: string) => {
         const state = get();
@@ -759,6 +860,8 @@ export const useChatStore = create<ChatStore>()(persist((set, get) => ({
         messages: {},
         hasMore: {},
         isLoading: false,
+        hasLoadedOnce: false,
+        scrollToMessageId: null,
         isLoadingMessages: false,
         isLoadingMore: false,
         searchQuery: '',
@@ -774,3 +877,5 @@ export const useChatStore = create<ChatStore>()(persist((set, get) => ({
         lastReadMessageId: state.lastReadMessageId,
     }),
 }));
+
+

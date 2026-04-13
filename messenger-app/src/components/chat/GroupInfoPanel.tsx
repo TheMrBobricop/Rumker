@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+﻿import { useEffect, useState, useCallback, useRef } from 'react';
 import { getChatParticipants, getChatMedia, addChatMembers, updateChat, type ChatParticipantsResponse } from '@/lib/api/chats';
 import { api } from '@/lib/api/client';
 import { MediaViewer } from '@/components/media/MediaViewer';
@@ -8,6 +8,7 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { X, Crown, Shield, Search, ImageIcon, FileText, LinkIcon, Play, ExternalLink, Download, UserPlus, Check, Loader2, Plus, MoreVertical, Ban, LogOut, Settings2, Pencil, Camera, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
+import { useAnimatedMount, ANIM_MODAL, ANIM_BACKDROP } from '@/lib/hooks/useAnimatedMount';
 import { useChatStore } from '@/stores/chatStore';
 import { VoiceChannelList } from '@/components/voice/VoiceChannelList';
 import { useVoiceChannelStore } from '@/stores/voiceChannelStore';
@@ -75,6 +76,10 @@ export function GroupInfoPanel({ chat, open, onClose, onOpenUserProfile, inline 
     const [editAvatar, setEditAvatar] = useState<string | undefined>(undefined);
     const [saving, setSaving] = useState(false);
     const editFileInputRef = useRef<HTMLInputElement>(null);
+
+    // Animated mount for Add Member modal
+    const { mounted: addMemberMounted, className: addMemberBackdropClass } = useAnimatedMount(showAddMember, ANIM_BACKDROP);
+    const { mounted: addMemberModalMounted, className: addMemberModalClass } = useAnimatedMount(showAddMember, ANIM_MODAL);
 
     // Current user's role info
     const myParticipant = data?.participants.find(p => p.userId === currentUserId);
@@ -892,9 +897,9 @@ export function GroupInfoPanel({ chat, open, onClose, onOpenUserProfile, inline 
                 )}
 
             {/* Add Member Modal */}
-            {showAddMember && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 animate-backdrop-in" onClick={() => { setShowAddMember(false); setAddMemberQuery(''); setSelectedUserIds(new Set()); setAddMemberResults([]); }}>
-                    <div className="bg-card rounded-xl mx-4 max-w-md w-full shadow-xl animate-fade-scale-in overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {(addMemberMounted || addMemberModalMounted) && (
+                <div className={`fixed inset-0 z-[60] flex items-center justify-center bg-black/50 ${addMemberBackdropClass}`} onClick={() => { setShowAddMember(false); setAddMemberQuery(''); setSelectedUserIds(new Set()); setAddMemberResults([]); }}>
+                    <div className={`bg-card rounded-xl mx-4 max-w-md w-full shadow-xl ${addMemberModalClass} overflow-hidden`} onClick={(e) => e.stopPropagation()}>
                         {/* Header */}
                         <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                             <div>

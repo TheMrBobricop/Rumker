@@ -1,4 +1,4 @@
-import { Server as HttpServer } from 'http';
+﻿import { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -7,11 +7,15 @@ import { supabase } from '../lib/supabase.js';
 // userId -> Set<socketId>
 const onlineUsers = new Map<string, Set<string>>();
 
+// Typing throttle: `${userId}:${chatId}` -> last broadcast timestamp
+const typingThrottles = new Map<string, number>();
+const TYPING_THROTTLE_MS = 3000;
+
 // In-memory cache: channelId -> chatId (voice channels change rarely)
 const channelChatIdCache = new Map<string, { chatId: string; expiresAt: number }>();
 const CHANNEL_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-// ── In-memory call state ──
+// в”Ђв”Ђ In-memory call state в”Ђв”Ђ
 interface CallParticipant {
     userId: string;
     username: string;
@@ -47,7 +51,7 @@ function findCallByUser(userId: string): ActiveCall | undefined {
 
 let io: Server | null = null;
 
-/** Return the shared supabase client (static import — .env loaded by dotenv/config in server/index.ts) */
+/** Return the shared supabase client (static import пїЅ .env loaded by dotenv/config in server/index.ts) */
 function getSupabase() {
     return supabase;
 }
@@ -96,7 +100,7 @@ async function autoJoinAllRooms(socket: Socket, userId: string): Promise<void> {
     socket.join(`user:${userId}`);
 }
 
-/** Join a user (all their sockets) to a specific chat room — used by routes when creating chats */
+/** Join a user (all their sockets) to a specific chat room пїЅ used by routes when creating chats */
 export function joinUserToRoom(userId: string, chatId: string): void {
     if (!io) return;
     const socketIds = onlineUsers.get(userId);
@@ -179,10 +183,14 @@ export function initializeSocket(httpServer: HttpServer): Server {
             .update({ is_online: true, last_seen: new Date().toISOString() })
             .eq('id', userId)
             .then(null, err => console.warn('Failed to update online status:', err));
-        socket.broadcast.emit('user:online', { userId, isOnline: true });
+        // Scoped broadcast: only emit to rooms where this user is a member
+        const userRooms = Array.from(socket.rooms).filter(r => r.startsWith('chat:'));
+        for (const room of userRooms) {
+            socket.to(room).emit('user:online', { userId, isOnline: true });
+        }
 
         // --- Room management (manual join for newly created chats) ---
-        // Проверяем членство перед добавлением в комнату
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         socket.on('chat:join', async (chatId: string) => {
             try {
                 const { data } = await getSupabase()
@@ -203,8 +211,13 @@ export function initializeSocket(httpServer: HttpServer): Server {
             socket.leave(`chat:${chatId}`);
         });
 
-        // --- Typing indicators ---
+        // --- Typing indicators (server-side throttle: max 1 broadcast per 3s per user+chat) ---
         socket.on('typing:start', (data: { chatId: string }) => {
+            const key = `${userId}:${data.chatId}`;
+            const now = Date.now();
+            const last = typingThrottles.get(key) || 0;
+            if (now - last < TYPING_THROTTLE_MS) return;
+            typingThrottles.set(key, now);
             socket.to(`chat:${data.chatId}`).emit('typing:start', {
                 userId,
                 chatId: data.chatId,
@@ -212,6 +225,8 @@ export function initializeSocket(httpServer: HttpServer): Server {
         });
 
         socket.on('typing:stop', (data: { chatId: string }) => {
+            const key = `${userId}:${data.chatId}`;
+            typingThrottles.delete(key);
             socket.to(`chat:${data.chatId}`).emit('typing:stop', {
                 userId,
                 chatId: data.chatId,
@@ -362,7 +377,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
             }
         });
 
-        // Voice channel text chat — ephemeral messages (not persisted)
+        // Voice channel text chat пїЅ ephemeral messages (not persisted)
         socket.on('voice:chat:message', async (data: { channelId: string; content: string }) => {
             try {
                 if (!data.content?.trim()) return;
@@ -405,7 +420,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
             });
         });
 
-        // ── Soundboard ──
+        // в”Ђв”Ђ Soundboard в”Ђв”Ђ
         const soundboardCooldowns = new Map<string, number>();
 
         socket.on('soundboard:play', async (data: { channelId: string; soundId: string; soundName: string; soundUrl?: string; isDefault: boolean }) => {
@@ -430,7 +445,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
             });
         });
 
-        // ── Screen share tracking ──
+        // в”Ђв”Ђ Screen share tracking в”Ђв”Ђ
         socket.on('voice:screen:start', async (data: { channelId: string }) => {
             const chatId = await getChannelChatId(data.channelId);
             if (!chatId) return;
@@ -451,7 +466,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
             });
         });
 
-        // ── Voice Admin Actions ──
+        // в”Ђв”Ђ Voice Admin Actions в”Ђв”Ђ
         socket.on('voice:admin:mute', async (data: { channelId: string; targetUserId: string; muted: boolean }) => {
             const chatId = await getChannelChatId(data.channelId);
             if (!chatId) return;
@@ -621,7 +636,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
             });
         });
 
-        // ── Call handlers ──
+        // в”Ђв”Ђ Call handlers в”Ђв”Ђ
 
         socket.on('call:initiate', async (data: { chatId: string; type: 'private' | 'group' }) => {
             try {
@@ -640,7 +655,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
                     chatTitle = initiator?.first_name || initiator?.username || '';
                 }
 
-                // Fetch chat participants once — reused for busy check and call:incoming
+                // Fetch chat participants once пїЅ reused for busy check and call:incoming
                 let chatParticipants: any[] | null = null;
                 if (data.type === 'private') {
                     const { data: participants } = await getSupabase()
@@ -660,7 +675,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
                                 callId,
                                 chatId: data.chatId,
                                 callerId: userId,
-                                callerName: initiator?.first_name || initiator?.username || 'Пользователь',
+                                callerName: initiator?.first_name || initiator?.username || 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ',
                             });
                             return;
                         }
@@ -669,7 +684,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
 
                 // Check if initiator is already in a call
                 if (findCallByUser(userId)) {
-                    socket.emit('call:error', { message: 'Вы уже в звонке' });
+                    socket.emit('call:error', { message: 'пїЅпїЅ пїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ' });
                     return;
                 }
 
@@ -723,7 +738,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
                     startedAt: call.startedAt,
                 });
 
-                // Emit call:incoming to the other user(s) — reuse participants from busy check
+                // Emit call:incoming to the other user(s) пїЅ reuse participants from busy check
                 if (data.type === 'private') {
                     // Reuse chatParticipants fetched above for busy check
                     const targetUser = (chatParticipants || []).find((p: any) => p.user_id !== userId);
@@ -733,26 +748,26 @@ export function initializeSocket(httpServer: HttpServer): Server {
                             chatId: data.chatId,
                             chatTitle,
                             callerId: userId,
-                            callerName: initiator?.first_name || initiator?.username || 'Пользователь',
+                            callerName: initiator?.first_name || initiator?.username || 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ',
                             callerAvatar: initiator?.avatar || '',
                             type: data.type,
                         });
                     }
                 } else {
-                    // Group call — emit to the chat room
+                    // Group call пїЅ emit to the chat room
                     socket.to(`chat:${data.chatId}`).emit('call:incoming', {
                         callId,
                         chatId: data.chatId,
                         chatTitle,
                         callerId: userId,
-                        callerName: initiator?.first_name || initiator?.username || 'Пользователь',
+                        callerName: initiator?.first_name || initiator?.username || 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ',
                         callerAvatar: initiator?.avatar || '',
                         type: data.type,
                     });
                 }
             } catch (err) {
                 console.error('[Socket] call:initiate error:', err);
-                socket.emit('call:error', { message: 'Не удалось начать звонок' });
+                socket.emit('call:error', { message: 'пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ' });
             }
         });
 
@@ -760,7 +775,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
             try {
                 const call = activeCalls.get(data.callId);
                 if (!call) {
-                    socket.emit('call:error', { message: 'Звонок не найден' });
+                    socket.emit('call:error', { message: 'пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ' });
                     return;
                 }
 
@@ -825,11 +840,11 @@ export function initializeSocket(httpServer: HttpServer): Server {
         });
 
         socket.on('call:join', async (data: { callId: string }) => {
-            // Same as accept — for group calls joining after start
+            // Same as accept пїЅ for group calls joining after start
             try {
                 const call = activeCalls.get(data.callId);
                 if (!call) {
-                    socket.emit('call:error', { message: 'Звонок не найден' });
+                    socket.emit('call:error', { message: 'пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ' });
                     return;
                 }
 
@@ -977,6 +992,13 @@ export function initializeSocket(httpServer: HttpServer): Server {
 
         // --- Disconnect ---
         socket.on('disconnect', async () => {
+            // Clean up typing throttle entries for this user
+            for (const key of typingThrottles.keys()) {
+                if (key.startsWith(`${userId}:`)) {
+                    typingThrottles.delete(key);
+                }
+            }
+
             // Clean up calls on disconnect (O(1) via reverse index)
             const userCallId = userCallMap.get(userId);
             if (userCallId) {
@@ -1038,7 +1060,11 @@ export function initializeSocket(httpServer: HttpServer): Server {
                         .update({ last_seen: new Date().toISOString(), is_online: false })
                         .eq('id', userId)
                         .then(null, err => console.warn('Failed to update last_seen:', err));
-                    socket.broadcast.emit('user:online', { userId, isOnline: false, lastSeen: new Date().toISOString() });
+                    // Scoped broadcast: only emit to rooms this user was in
+                    const disconnectRooms = Array.from(socket.rooms).filter(r => r.startsWith('chat:'));
+                    for (const room of disconnectRooms) {
+                        socket.to(room).emit('user:online', { userId, isOnline: false, lastSeen: new Date().toISOString() });
+                    }
                 }
             }
         });
@@ -1057,3 +1083,5 @@ export function getIO(): Server {
 export function isUserOnline(userId: string): boolean {
     return onlineUsers.has(userId) && onlineUsers.get(userId)!.size > 0;
 }
+
+

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+﻿import { useEffect, useRef } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useCallStore } from '@/stores/callStore';
@@ -16,7 +16,7 @@ export function useSocket() {
 
     // Main effect: handle connect/disconnect/update based on token
     useEffect(() => {
-        // Logout → disconnect everything
+        // Logout в†’ disconnect everything
         if (!token) {
             if (listenersRef.current) {
                 socketService.removeAllListeners();
@@ -26,7 +26,7 @@ export function useSocket() {
             return;
         }
 
-        // Token changed (refresh) but listeners already set up → just update auth
+        // Token changed (refresh) but listeners already set up в†’ just update auth
         if (listenersRef.current) {
             socketService.updateAuth(token);
             // If socket got disconnected, reconnect with fresh token
@@ -43,13 +43,13 @@ export function useSocket() {
         // Helper: read currentUserId from store at call-time (avoids stale closure)
         const getMyId = () => useAuthStore.getState().user?.id;
 
-        // ── Message events ──
+        // в”Ђв”Ђ Message events в”Ђв”Ђ
 
         socketService.onNewMessage((message) => {
             const myId = getMyId();
 
             if (message.senderId === myId) {
-                // Own message: REST already replaced temp → real.
+                // Own message: REST already replaced temp в†’ real.
                 // Socket also delivers it — skip if already in store.
                 const chatMessages = useChatStore.getState().messages[message.chatId] || [];
                 const exists = chatMessages.some((m) => m.id === message.id);
@@ -82,8 +82,8 @@ export function useSocket() {
             // Notifications: check if chat is muted (mentions always notify)
             const chat = useChatStore.getState().chats.find(c => c.id === message.chatId);
             if (!chat?.isMuted || isMentioned) {
-                const senderName = message.sender?.firstName || message.sender?.username || 'Сообщение';
-                const body = isMentioned ? `упомянул(а) вас: ${message.content}` : (message.content || '');
+                const senderName = message.sender?.firstName || message.sender?.username || 'Пользователь';
+                const body = isMentioned ? `Упоминание вас: ${message.content}` : (message.content || '');
                 showBrowserNotification(senderName, body);
                 playNotificationSound();
             }
@@ -134,7 +134,7 @@ export function useSocket() {
             useChatStore.getState().clearPinnedMessages(data.chatId);
         });
 
-        // ── Poll events ──
+        // в”Ђв”Ђ Poll events в”Ђв”Ђ
 
         socketService.onPollUpdate((data) => {
             const chatMessages = useChatStore.getState().messages[data.chatId] || [];
@@ -149,7 +149,7 @@ export function useSocket() {
             }
         });
 
-        // ── Reaction events ──
+        // в”Ђв”Ђ Reaction events в”Ђв”Ђ
 
         socketService.onMessageReaction((data) => {
             const myId = getMyId();
@@ -185,7 +185,7 @@ export function useSocket() {
             useChatStore.getState().updateMessage({ ...msg, reactions });
         });
 
-        // ── Admin events ──
+        // в”Ђв”Ђ Admin events в”Ђв”Ђ
 
         socketService.onMemberRoleChanged((data) => {
             const myId = getMyId();
@@ -196,7 +196,7 @@ export function useSocket() {
                 if (data.role === 'admin') {
                     toast.success('Вы назначены администратором');
                 } else if (data.role === 'member') {
-                    toast.info('Вы были понижены до участника');
+                    toast.info('Вы больше не администратор');
                 }
             }
         });
@@ -213,7 +213,7 @@ export function useSocket() {
                 if (activeChat?.id === data.chatId) {
                     useChatStore.getState().setActiveChat(null);
                 }
-                toast.error(data.reason === 'banned' ? 'Вы заблокированы в этой группе' : 'Вы исключены из группы');
+                toast.error(data.reason === 'banned' ? 'Вы исключены из чата' : 'Вы удалены из чата');
             } else {
                 useChatStore.getState().removeParticipant(data.chatId, data.userId);
             }
@@ -227,7 +227,7 @@ export function useSocket() {
             });
         });
 
-        // ── Reconnect: reload active chat messages ──
+        // в”Ђв”Ђ Reconnect: reload active chat messages в”Ђв”Ђ
 
         socketService.onReconnect(() => {
             console.log('[useSocket] Reconnected — reloading chats, messages, and pins');
@@ -239,7 +239,7 @@ export function useSocket() {
             }
         });
 
-        // ── Voice channel events ──
+        // в”Ђв”Ђ Voice channel events в”Ђв”Ђ
 
         socketService.onVoiceUserJoined((data) => {
             const myId = getMyId();
@@ -390,7 +390,7 @@ export function useSocket() {
             );
         });
 
-        // ── Voice WebRTC signaling ──
+        // в”Ђв”Ђ Voice WebRTC signaling в”Ђв”Ђ
 
         socketService.onVoiceOffer((data) => {
             if (data.fromUserId !== getMyId()) {
@@ -410,14 +410,14 @@ export function useSocket() {
             }
         });
 
-        // ── Voice Admin Events ──
+        // в”Ђв”Ђ Voice Admin Events в”Ђв”Ђ
 
         socketService.onVoiceAdminServerMuted((data) => {
             const vc = useVoiceChannelStore.getState();
             if (vc.currentChannel?.id === data.channelId) {
                 vc.setMuted(data.muted);
                 voiceChannelPeerManager.setMuted(data.muted);
-                toast.warning(data.muted ? 'Администратор замутил вас' : 'Администратор размутил вас');
+                toast.warning(data.muted ? 'Администратор выключил вам микрофон' : 'Администратор включил вам микрофон');
             }
         });
 
@@ -430,7 +430,7 @@ export function useSocket() {
                     vc.setMuted(true);
                     voiceChannelPeerManager.setMuted(true);
                 }
-                toast.warning(data.deafened ? 'Администратор оглушил вас' : 'Администратор снял оглушение');
+                toast.warning(data.deafened ? 'Администратор заглушил вас' : 'Администратор снял заглушение');
             }
         });
 
@@ -460,25 +460,25 @@ export function useSocket() {
             }
         });
 
-        // ── Friend events ──
+        // в”Ђв”Ђ Friend events в”Ђв”Ђ
 
         socketService.onFriendRequest((data: { userId: string; username: string; firstName?: string; lastName?: string; avatar?: string }) => {
             const name = data.firstName || data.username || 'Пользователь';
-            toast.info(`${name} отправил(а) заявку в друзья`);
-            showBrowserNotification('Заявка в друзья', `${name} отправил(а) заявку`);
+            toast.info(`${name} отправил(а) запрос в друзья`);
+            showBrowserNotification('Новый запрос в друзья', `${name} отправил(а) запрос`);
             playNotificationSound();
         });
 
         socketService.onFriendAccepted((data: { userId: string; username: string; firstName?: string; lastName?: string; avatar?: string }) => {
             const name = data.firstName || data.username || 'Пользователь';
-            toast.success(`${name} принял(а) заявку в друзья`);
+            toast.success(`${name} принял(а) запрос в друзья`);
         });
 
         socketService.onFriendRejected(() => {
             // Silent — no toast needed for rejection
         });
 
-        // ── Call events ──
+        // в”Ђв”Ђ Call events в”Ђв”Ђ
 
         socketService.onCallIncoming((data) => {
             useCallStore.getState().setIncomingCall({
@@ -640,9 +640,9 @@ export function useSocket() {
             }
 
             if (data.reason === 'timeout') {
-                toast.info('Нет ответа');
+                toast.info('Звонок пропущен');
             } else if (data.reason === 'ended') {
-                toast.info('Звонок завершён');
+                toast.info('Звонок завершен');
             }
         });
 
@@ -650,7 +650,7 @@ export function useSocket() {
             ringtone.stop();
             const callStore = useCallStore.getState();
             if (callStore.activeCall?.callId === data.callId) {
-                toast.info('Звонок отклонён');
+                toast.info('Вызов отклонен');
                 peerManager.destroy();
                 playCallEndSound();
                 callStore.reset();
@@ -681,13 +681,13 @@ export function useSocket() {
             peerManager.destroy();
             useCallStore.getState().reset();
             playBusySound();
-            toast.info('Абонент занят');
+            toast.info('Пользователь занят');
         });
 
         // Missed call: the busy user gets a notification sound + toast
         socketService.onCallMissed((data) => {
             playNotificationSound();
-            toast.info(`Пропущенный звонок от ${data.callerName}`);
+            toast.info(`Пропущенный вызов от ${data.callerName}`);
         });
 
         // NOTE: No cleanup function returned here.
@@ -705,3 +705,5 @@ export function useSocket() {
         };
     }, []);
 }
+
+

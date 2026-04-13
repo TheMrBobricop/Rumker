@@ -1,4 +1,4 @@
-// Side-effect import: загружает .env ПЕРЕД всеми остальными модулями
+// Side-effect import: load .env before any other module initializes.
 import 'dotenv/config';
 
 import express from 'express';
@@ -9,47 +9,42 @@ import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import fs from 'fs';
+import dns from 'node:dns/promises';
 import { fileURLToPath } from 'url';
 import { initializeSocket } from './socket/index.js';
 import { runStartupMigrations } from './lib/migrate.js';
 
-// Загрузка конфигурации безопасности
 const CLIENT_URL = process.env.VITE_CLIENT_URL || 'http://localhost:5173';
 const PORT = process.env.PORT || 3000;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
-// Инициализация Express
 const app = express();
 const httpServer = createServer(app);
 
-// Initialize Socket.io (allow any origin for beta — same-origin in production build)
+// Initialize Socket.io (open origins in beta, same-origin in production build).
 const io = initializeSocket(httpServer);
 app.set('io', io);
 
-// Trust first proxy (Vite dev server, nginx, etc.) so X-Forwarded-For works
+// Trust first proxy (Vite dev server, nginx, etc.) so X-Forwarded-For works.
 app.set('trust proxy', 1);
 
-// --- Блокировка и защита ---
-
-// 1. Helmet для HTTP заголовков безопасности
+// Security middleware.
 app.use(
     helmet({
         contentSecurityPolicy: {
             directives: {
                 defaultSrc: ["'self'"],
                 scriptSrc: ["'self'"],
-                styleSrc: ["'self'", "'unsafe-inline'"], // Tailwind injects inline styles
-                imgSrc: ["'self'", "data:", "blob:", "https://*.supabase.co", "https://*"],
-                mediaSrc: ["'self'", "blob:", "https://*.supabase.co"],
-                connectSrc: ["'self'", "ws:", "wss:", "https://*.supabase.co", "https://*"],
+                styleSrc: ["'self'", "'unsafe-inline'"],
+                imgSrc: ["'self'", 'data:', 'blob:', 'https://*.supabase.co', 'https://*'],
+                mediaSrc: ["'self'", 'blob:', 'https://*.supabase.co'],
+                connectSrc: ["'self'", 'ws:', 'wss:', 'https://*.supabase.co', 'https://*'],
             },
         },
-        // В production-режиме Express раздает статику — нужно разрешить inline стили и скрипты
         crossOriginEmbedderPolicy: false,
     })
 );
 
-// 2. CORS — разрешаем известные источники + ngrok туннели для разработки
 const ALLOWED_ORIGINS = [
     CLIENT_URL,
     'http://localhost:5173',
@@ -57,7 +52,6 @@ const ALLOWED_ORIGINS = [
     'http://localhost:8080',
 ].filter(Boolean);
 
-// Паттерны для dev-туннелей (ngrok, localtunnel и т.п.)
 const ALLOWED_ORIGIN_PATTERNS = [
     /^https?:\/\/.*\.ngrok-free\.app$/,
     /^https?:\/\/.*\.ngrok\.io$/,
@@ -67,11 +61,9 @@ const ALLOWED_ORIGIN_PATTERNS = [
 app.use(
     cors({
         origin: (origin, callback) => {
-            // Разрешаем запросы без Origin (мобильные клиенты, curl, server-to-server)
             if (!origin) return callback(null, true);
             if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-            if (ALLOWED_ORIGIN_PATTERNS.some(p => p.test(origin))) return callback(null, true);
-            // Не бросаем Error — это вызывает 500. Просто отклоняем origin.
+            if (ALLOWED_ORIGIN_PATTERNS.some((pattern) => pattern.test(origin))) return callback(null, true);
             callback(null, false);
         },
         credentials: true,
@@ -80,65 +72,88 @@ app.use(
     })
 );
 
-// 3. Rate Limiting — мягкий лимит для бета
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 3000, // 3000 запросов за 15 мин (socket reconnects + API вместе набирают много)
+    max: 3000,
     message: 'Too many requests from this IP, please try again later',
     standardHeaders: true,
     legacyHeaders: false,
 });
 app.use('/api', limiter);
 
-// --- Middleware ---
+// Core middleware.
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 
-// --- Статические файлы (локальные загрузки) ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- API Роуты ---
+async function checkSupabaseDns() {
+    const rawUrl = process.env.SUPABASE_URL;
+    if (!rawUrl) return;
+
+    try {
+        const host = new URL(rawUrl).hostname;
+        await dns.lookup(host);
+    } catch {
+        console.error('[Supabase] SUPABASE_URL host is unreachable. Check project URL in messenger-app/.env');
+    }
+}
+
 import routes from './routes/index.js';
 app.use('/api', routes);
 
-// --- Production: раздаём собранный фронтенд ---
+// Frontend static serving.
 const distPath = path.resolve(__dirname, '../dist');
-if (fs.existsSync(distPath)) {
-    // Serve static assets (JS, CSS, images)
-    app.use(express.static(distPath));
+const hasDist = fs.existsSync(distPath);
+const SHOULD_SERVE_STATIC = hasDist && (IS_PRODUCTION || process.env.SERVE_STATIC !== 'false');
 
-    // SPA catch-all: все не-API пути → index.html (Express 5 syntax)
+if (SHOULD_SERVE_STATIC) {
+    app.use(
+        express.static(distPath, {
+            setHeaders: (res, filePath) => {
+                if (filePath.endsWith('index.html')) {
+                    res.setHeader('Cache-Control', 'no-store, max-age=0');
+                }
+            },
+        })
+    );
+
     app.use((req, res, next) => {
         if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
             return next();
         }
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
         res.sendFile(path.join(distPath, 'index.html'));
     });
 
-    console.log('Serving production frontend from dist/');
+    console.log('Serving frontend from dist/');
+} else if (!IS_PRODUCTION && hasDist) {
+    console.log('Skipping dist/ static serving in dev mode (set SERVE_STATIC=false to disable by choice).');
 }
 
-// Глобальный обработчик ошибок
+// Global error handler.
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error('Global error:', err.message);
     res.status(err.status || 500).json({ message: err.message || 'Internal server error' });
 });
 
-// Запуск сервера
 if (process.env.NODE_ENV !== 'test') {
+    checkSupabaseDns().catch(() => {});
     runStartupMigrations().catch(() => {});
     httpServer.listen(Number(PORT), '0.0.0.0', () => {
         console.log(`\n=== Rumker Server v1.1 ===`);
         console.log(`Server running on http://0.0.0.0:${PORT}`);
-        console.log(`Socket.io ready`);
-        console.log(`Routes: /api/auth/me, /api/chats/:chatId/members, /api/friends`);
+        console.log('Socket.io ready');
+        console.log('Routes: /api/auth/me, /api/chats/:chatId/members, /api/friends');
         console.log(`Started at: ${new Date().toISOString()}`);
-        if (fs.existsSync(distPath)) {
+        if (SHOULD_SERVE_STATIC && hasDist) {
             console.log(`Open in browser: http://localhost:${PORT}`);
+        } else {
+            console.log(`Frontend dev server: ${CLIENT_URL}`);
         }
-        console.log(`========================\n`);
+        console.log('========================\n');
     });
 }
 

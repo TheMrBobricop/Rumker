@@ -1,4 +1,4 @@
-
+﻿
 import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions';
 import { NewMessage } from 'telegram/events';
@@ -6,7 +6,7 @@ import { Api } from 'telegram/tl';
 import path from 'path';
 import fs from 'fs';
 
-// Интерфейс для хранения сессии в памяти сервера
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 interface ActiveClient {
     client: TelegramClient;
     userId: string;
@@ -16,21 +16,21 @@ interface ActiveClient {
 class TelegramService {
     private activeClients: Map<string, ActiveClient> = new Map();
 
-    // API ID и Hash — лучше вынести в env, но пока заглушкой
-    // В реальном проекте каждый пользователь должен вводить свои или использовать общий app
+    // API ID пїЅ Hash пїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ env, пїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+    // пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ app
     private apiId: number = parseInt(process.env.TELEGRAM_API_ID || '0');
     private apiHash: string = process.env.TELEGRAM_API_HASH || '';
 
     constructor() {
         if (!this.apiId || !this.apiHash) {
-            console.warn('⚠️ TELEGRAM_API_ID or TELEGRAM_API_HASH is missing in .env');
+            console.warn('вљ пёЏ TELEGRAM_API_ID or TELEGRAM_API_HASH is missing in .env');
         }
     }
 
     /**
-     * Инициализация клиента для пользователя
-     * @param userId ID пользователя в нашей системе
-     * @param sessionString Строка сессии (StringSession) из БД
+     * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+     * @param userId ID пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+     * @param sessionString пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ (StringSession) пїЅпїЅ пїЅпїЅ
      */
     async initializeClient(userId: string, sessionString: string = '') {
         if (this.activeClients.has(userId)) {
@@ -48,12 +48,12 @@ class TelegramService {
             systemLangCode: 'en',
         });
 
-        // Подключение (без интерактивного ввода, предполагается, что сессия валидна)
-        // Для первого входа (Login) будет отдельный метод
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
+        // пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ (Login) пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
         try {
             await client.connect();
 
-            // Добавляем обработчик событий
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
             client.addEventHandler((event) => {
                 this.handleEvent(userId, event);
             }, new NewMessage({}));
@@ -61,19 +61,19 @@ class TelegramService {
             this.activeClients.set(userId, {
                 client,
                 userId,
-                phone: '', // Нужно получить из getMe() если требуется
+                phone: '', // пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ getMe() пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
             });
 
-            console.log(`✅ Telegram Client initialized for user ${userId}`);
+            console.log(`вњ… Telegram Client initialized for user ${userId}`);
             return client;
         } catch (error) {
-            console.error(`❌ Failed to initialize Telegram client for user ${userId}:`, error);
+            console.error(`вќЊ Failed to initialize Telegram client for user ${userId}:`, error);
             throw error;
         }
     }
 
     /**
-     * Вход по номеру телефона (Шаг 1)
+     * пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅ 1)
      */
     async sendCode(userId: string, phoneNumber: string) {
         const client = new TelegramClient(new StringSession(''), this.apiId, this.apiHash, {
@@ -83,10 +83,10 @@ class TelegramService {
 
         await client.connect();
 
-        // Сохраняем временного клиента для завершения авторизации
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         this.activeClients.set(`temp_${userId}`, { client, userId, phone: phoneNumber });
 
-        // Используем invoke для отправки кода
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ invoke пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
         const result = await client.invoke(
             new Api.auth.SendCode({
                 phoneNumber,
@@ -100,32 +100,32 @@ class TelegramService {
     }
 
     /**
-     * Проверка 2FA пароля (Шаг 3 — если аккаунт с двухфакторной аутентификацией)
+     * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ 2FA пїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅ 3 пїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
      */
     async checkPassword(userId: string, password: string): Promise<{ sessionString: string }> {
         const tempClient = this.activeClients.get(`temp_${userId}`);
-        if (!tempClient) throw new Error('Сессия истекла. Начните процесс входа заново.');
+        if (!tempClient) throw new Error('пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ. пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ.');
 
         const client = tempClient.client;
 
-        // Получаем SRP-параметры от Telegram
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ SRP-пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ Telegram
         const passwordInfo = await client.invoke(new Api.account.GetPassword());
 
-        // Вычисляем SRP-проверку пароля через утилиту gram.js
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ SRP-пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ gram.js
         const { computeCheck } = await import('telegram/Password');
         const inputCheckPassword = await computeCheck(passwordInfo, password);
 
-        // Проверяем пароль
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
         await client.invoke(new Api.auth.CheckPassword({ password: inputCheckPassword }));
 
-        // Сохраняем сессию
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
         const sessionString = client.session.save() as unknown as string;
 
-        // Перемещаем из temp в active
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ temp пїЅ active
         this.activeClients.delete(`temp_${userId}`);
         this.activeClients.set(userId, { client, userId, phone: tempClient.phone });
 
-        // Настраиваем слушатели
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         client.addEventHandler((event) => {
             this.handleEvent(userId, event);
         }, new NewMessage({}));
@@ -134,7 +134,7 @@ class TelegramService {
     }
 
     /**
-     * Завершение входа (Шаг 2)
+     * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅ 2)
      */
     async signIn(userId: string, phoneNumber: string, phoneCodeHash: string, phoneCode: string) {
         const tempClient = this.activeClients.get(`temp_${userId}`);
@@ -151,14 +151,14 @@ class TelegramService {
                 })
             );
 
-            // Сохраняем сессию
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
             const sessionString = client.session.save() as unknown as string;
 
-            // Перемещаем из temp в active
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ temp пїЅ active
             this.activeClients.delete(`temp_${userId}`);
             this.activeClients.set(userId, { client, userId, phone: phoneNumber });
 
-            // Настраиваем слушатели
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
             client.addEventHandler((event) => {
                 this.handleEvent(userId, event);
             }, new NewMessage({}));
@@ -171,7 +171,7 @@ class TelegramService {
     }
 
     /**
-     * Отправка сообщения
+     * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
      */
     async sendMessage(userId: string, peer: string, message: string) {
         const clientData = this.activeClients.get(userId);
@@ -181,7 +181,7 @@ class TelegramService {
     }
 
     /**
-     * Получение диалогов
+     * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
      */
     async getDialogs(userId: string, limit: number = 20) {
         const clientData = this.activeClients.get(userId);
@@ -192,8 +192,8 @@ class TelegramService {
 
     private handleEvent(userId: string, event: any) {
         const message = event.message;
-        // Здесь будем отправлять событие через Socket.IO на фронтенд
-        console.log(`📩 New message for user ${userId}:`, message.message);
+        // пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ Socket.IO пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+        console.log(`рџ“© New message for user ${userId}:`, message.message);
     }
 
     /**
@@ -209,3 +209,5 @@ class TelegramService {
 }
 
 export const telegramService = new TelegramService();
+
+

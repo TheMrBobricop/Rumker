@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useVoiceChannelStore } from '@/stores/voiceChannelStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -197,6 +197,7 @@ export function VoiceChannelsTab({ className, onOpenChat }: VoiceChannelsTabProp
                             isMuted: false,
                             isDeafened: false,
                             isSpeaking: false,
+                            joinedAt: new Date(),
                         }],
                     };
                 }),

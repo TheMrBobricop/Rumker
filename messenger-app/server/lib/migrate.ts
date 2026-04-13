@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+﻿import { createClient } from '@supabase/supabase-js';
 
 const MIGRATION_SQL = `
 -- Chats table: add missing columns
@@ -87,7 +87,7 @@ export async function runStartupMigrations(): Promise<void> {
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
     if (!url || !key) {
-        console.warn('[Migrate] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set — skipping migrations');
+        console.warn('[Migrate] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set пїЅ skipping migrations');
         return;
     }
 
@@ -104,6 +104,7 @@ export async function runStartupMigrations(): Promise<void> {
         'ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ DEFAULT NULL',
         'ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned_by UUID DEFAULT NULL',
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_settings JSONB DEFAULT \'{"lastSeen":"everyone","profilePhoto":"everyone","phoneNumber":"contacts","readReceipts":true}\'::jsonb',
+        'ALTER TABLE messages ADD COLUMN IF NOT EXISTS search_vector tsvector GENERATED ALWAYS AS (to_tsvector(\'russian\', coalesce(content, \'\'))) STORED',
     ];
 
     let autoMigrateOk = true;
@@ -111,7 +112,7 @@ export async function runStartupMigrations(): Promise<void> {
         try {
             const { error } = await supabase.rpc('exec_sql', { query: sql });
             if (error) {
-                // rpc 'exec_sql' may not exist — that's fine, fall back to manual
+                // rpc 'exec_sql' may not exist пїЅ that's fine, fall back to manual
                 autoMigrateOk = false;
                 break;
             }
@@ -131,3 +132,5 @@ export async function runStartupMigrations(): Promise<void> {
         console.log('');
     }
 }
+
+

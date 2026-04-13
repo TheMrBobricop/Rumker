@@ -1,4 +1,4 @@
-
+﻿
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { User } from '@/types';
@@ -23,7 +23,7 @@ export const useAuthStore = create<AuthState>()(
             setTokens: (token) => set({ token }),
             logout: () => {
                 tokenStorage.clear();
-                // Dynamic import to break circular dependency authStore ↔ chatStore
+                // Dynamic import to break circular dependency authStore в†” chatStore
                 import('./chatStore').then(({ useChatStore }) => {
                     useChatStore.getState().reset();
                 });
@@ -36,7 +36,7 @@ export const useAuthStore = create<AuthState>()(
             storage: typeof window !== 'undefined' ? createJSONStorage(() => localStorage) : undefined,
             migrate: (persistedState: any, version: number) => {
                 if (version < 3) {
-                    // Сбрасываем старое состояние — убираем refreshToken из localStorage
+                    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ refreshToken пїЅпїЅ localStorage
                     return {
                         user: null,
                         token: null,
@@ -48,3 +48,5 @@ export const useAuthStore = create<AuthState>()(
         }
     )
 );
+
+

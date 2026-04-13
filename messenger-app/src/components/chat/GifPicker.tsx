@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Search, Loader2, Star, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAnimatedMount, ANIM_MODAL, ANIM_BACKDROP } from '@/lib/hooks/useAnimatedMount';
 
 interface GifResult {
     id: string;
@@ -162,14 +163,17 @@ export function GifPicker({ open, onClose, onSelectGif }: GifPickerProps) {
         }
     }, []);
 
-    if (!open) return null;
+    const { mounted: backdropMounted, className: backdropClass } = useAnimatedMount(open, ANIM_BACKDROP);
+    const { mounted: modalMounted, className: modalClass } = useAnimatedMount(open, ANIM_MODAL);
+
+    if (!backdropMounted && !modalMounted) return null;
 
     const displayGifs = activeTab === 'favorites' ? favorites : gifs;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-backdrop-in" onClick={onClose}>
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 ${backdropClass}`} onClick={onClose}>
             <div
-                className="bg-card rounded-2xl mx-4 max-w-lg w-full shadow-2xl animate-fade-scale-in overflow-hidden flex flex-col"
+                className={`bg-card rounded-2xl mx-4 max-w-lg w-full shadow-2xl ${modalClass} overflow-hidden flex flex-col`}
                 style={{ maxHeight: '80vh' }}
                 onClick={(e) => e.stopPropagation()}
             >

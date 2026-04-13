@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+﻿import { useState, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Pencil, Users, Megaphone, Lock, X, ArrowLeft, Search, Check, Camera } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -8,6 +8,7 @@ import { createChat, findOrCreatePrivateChat, uploadChatFile } from '@/lib/api/c
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Chat } from '@/types';
+import { useAnimatedMount, ANIM_MODAL, ANIM_BACKDROP } from '@/lib/hooks/useAnimatedMount';
 
 interface NewChatFABProps {
     onChatCreated: (chat: Chat) => void;
@@ -57,6 +58,9 @@ export function NewChatFAB({ onChatCreated }: NewChatFABProps) {
     const [fabRect, setFabRect] = useState<DOMRect | null>(null);
 
     const isOpen = step !== 'closed';
+    const dialogOpen = step !== 'closed' && step !== 'menu';
+    useAnimatedMount(dialogOpen, ANIM_BACKDROP);
+    useAnimatedMount(dialogOpen, ANIM_MODAL);
 
     const loadFriends = useCallback(async () => {
         setFriendsLoading(true);

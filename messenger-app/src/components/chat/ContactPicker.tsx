@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { X, Search, MessageSquare } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { api } from '@/lib/api/client';
+import { useAnimatedMount, ANIM_MODAL, ANIM_BACKDROP } from '@/lib/hooks/useAnimatedMount';
 
 interface Friend {
     id: string;
@@ -28,6 +29,8 @@ export function ContactPicker({ open, onClose, onSelectContact }: ContactPickerP
     const [friends, setFriends] = useState<Friend[]>([]);
     const [filter, setFilter] = useState('');
     const [loading, setLoading] = useState(false);
+    const { mounted: backdropMounted, className: backdropClass } = useAnimatedMount(open, ANIM_BACKDROP);
+    const { mounted: modalMounted, className: modalClass } = useAnimatedMount(open, ANIM_MODAL);
 
     useEffect(() => {
         if (!open) return;
@@ -41,7 +44,7 @@ export function ContactPicker({ open, onClose, onSelectContact }: ContactPickerP
             .finally(() => setLoading(false));
     }, [open]);
 
-    if (!open) return null;
+    if (!backdropMounted && !modalMounted) return null;
 
     const filtered = friends.filter(f => {
         if (!filter) return true;
@@ -50,9 +53,9 @@ export function ContactPicker({ open, onClose, onSelectContact }: ContactPickerP
     });
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-backdrop-in" onClick={onClose}>
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 ${backdropClass}`} onClick={onClose}>
             <div
-                className="bg-card rounded-xl mx-4 max-w-sm w-full shadow-xl animate-fade-scale-in overflow-hidden"
+                className={`bg-card rounded-xl mx-4 max-w-sm w-full shadow-xl ${modalClass} overflow-hidden`}
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}

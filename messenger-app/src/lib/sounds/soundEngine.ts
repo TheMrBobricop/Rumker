@@ -1,5 +1,5 @@
-/**
- * Rumker Sound Engine — Web Audio API based
+﻿/**
+ * Rumker Sound Engine пїЅ Web Audio API based
  * Supports per-sound volume, 3-band EQ, pitch shift, distortion, custom sounds
  */
 
@@ -15,17 +15,17 @@ export type SoundType =
 
 export interface SoundConfig {
     enabled: boolean;
-    volume: number;         // 0–100
-    pitch: number;          // 0.5–2.0 (1.0 = normal)
+    volume: number;         // 0пїЅ100
+    pitch: number;          // 0.5пїЅ2.0 (1.0 = normal)
     bass: number;           // -12 to +12 dB
     mid: number;            // -12 to +12 dB
     treble: number;         // -12 to +12 dB
-    distortion: number;     // 0–100
+    distortion: number;     // 0пїЅ100
     customSoundData?: string; // base64 data URL or blob URL
 }
 
 export interface SoundSettings {
-    masterVolume: number; // 0–100
+    masterVolume: number; // 0пїЅ100
     sounds: Record<SoundType, SoundConfig>;
 }
 
@@ -57,11 +57,11 @@ export const SOUND_LABELS: Record<SoundType, string> = {
     messageSend: 'Отправка сообщения',
     messageReceive: 'Получение сообщения',
     notification: 'Уведомление',
-    voiceJoin: 'Вход в голосовой',
-    voiceLeave: 'Выход из голосового',
-    callRing: 'Входящий звонок',
-    callConnect: 'Начало звонка',
-    callEnd: 'Завершение звонка',
+    voiceJoin: 'Вход в голосовой канал',
+    voiceLeave: 'Выход из голосового канала',
+    callRing: 'Входящий вызов',
+    callConnect: 'Подключение вызова',
+    callEnd: 'Завершение вызова',
 };
 
 // Distortion curve generator
@@ -109,7 +109,7 @@ class SoundEngine {
         this.customBuffers.delete(type);
     }
 
-    /** Build the effects chain: source → EQ → distortion → gain → destination */
+    /** Build the effects chain: source в†’ EQ в†’ distortion в†’ gain в†’ destination */
     private buildChain(ctx: AudioContext, config: SoundConfig): {
         input: AudioNode;
         output: AudioNode;
@@ -138,7 +138,7 @@ class SoundEngine {
         trebleFilter.frequency.value = 3000;
         trebleFilter.gain.value = config.treble;
 
-        // Chain: input → bass → mid → treble → [distortion] → gain → destination
+        // Chain: input в†’ bass в†’ mid в†’ treble в†’ [distortion] в†’ gain в†’ destination
         bassFilter.connect(midFilter);
         midFilter.connect(trebleFilter);
 
@@ -248,7 +248,7 @@ class SoundEngine {
         }
     }
 
-    // ── Generated sounds ──
+    // в”Ђв”Ђ Generated sounds в”Ђв”Ђ
 
     private osc(ctx: AudioContext, dest: AudioNode, freq: number, start: number, dur: number, type: OscillatorType = 'sine', rate = 1): void {
         const o = ctx.createOscillator();
@@ -264,45 +264,45 @@ class SoundEngine {
     }
 
     private genMessageSend(ctx: AudioContext, dest: AudioNode, now: number, rate: number): void {
-        // Quick ascending chirp — C5→G5
+        // Quick ascending chirp пїЅ C5в†’G5
         this.osc(ctx, dest, 523, now, 0.06, 'triangle', rate);
         this.osc(ctx, dest, 784, now + 0.04, 0.08, 'triangle', rate);
     }
 
     private genNotification(ctx: AudioContext, dest: AudioNode, now: number, rate: number): void {
-        // Two-note chime — E5→G5
+        // Two-note chime пїЅ E5в†’G5
         this.osc(ctx, dest, 659, now, 0.12, 'sine', rate);
         this.osc(ctx, dest, 784, now + 0.1, 0.15, 'sine', rate);
     }
 
     private genVoiceJoin(ctx: AudioContext, dest: AudioNode, now: number, rate: number): void {
-        // Bright ascending 3-note — C5→E5→G5 (major chord)
+        // Bright ascending 3-note пїЅ C5в†’E5в†’G5 (major chord)
         this.osc(ctx, dest, 523, now, 0.13, 'sine', rate);
         this.osc(ctx, dest, 659, now + 0.1, 0.13, 'sine', rate);
         this.osc(ctx, dest, 784, now + 0.2, 0.18, 'sine', rate);
     }
 
     private genVoiceLeave(ctx: AudioContext, dest: AudioNode, now: number, rate: number): void {
-        // Descending 2-note — E5→C5
+        // Descending 2-note пїЅ E5в†’C5
         this.osc(ctx, dest, 659, now, 0.13, 'sine', rate);
         this.osc(ctx, dest, 523, now + 0.12, 0.18, 'sine', rate);
     }
 
     private genCallRing(ctx: AudioContext, dest: AudioNode, now: number, rate: number): void {
-        // Repeating ring pattern — E5 G5 A5
+        // Repeating ring pattern пїЅ E5 G5 A5
         this.osc(ctx, dest, 659, now, 0.2, 'sine', rate);
         this.osc(ctx, dest, 784, now + 0.22, 0.2, 'sine', rate);
         this.osc(ctx, dest, 880, now + 0.44, 0.25, 'sine', rate);
     }
 
     private genCallConnect(ctx: AudioContext, dest: AudioNode, now: number, rate: number): void {
-        // Quick ascending — C5→E5
+        // Quick ascending пїЅ C5в†’E5
         this.osc(ctx, dest, 523, now, 0.1, 'sine', rate);
         this.osc(ctx, dest, 659, now + 0.08, 0.14, 'sine', rate);
     }
 
     private genCallEnd(ctx: AudioContext, dest: AudioNode, now: number, rate: number): void {
-        // Descending — G4→E4→C4
+        // Descending пїЅ G4в†’E4в†’C4
         this.osc(ctx, dest, 392, now, 0.12, 'sine', rate);
         this.osc(ctx, dest, 330, now + 0.1, 0.12, 'sine', rate);
         this.osc(ctx, dest, 262, now + 0.2, 0.18, 'sine', rate);
@@ -310,3 +310,5 @@ class SoundEngine {
 }
 
 export const soundEngine = new SoundEngine();
+
+

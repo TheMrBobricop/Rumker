@@ -1,4 +1,4 @@
-
+﻿
 import { useState, useRef, useCallback, memo } from 'react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -186,6 +186,7 @@ interface MessageBubbleProps {
     onReactionClick?: (messageId: string, emoji: string) => void;
     onDoubleClick?: (message: Message) => void;
     onScrollToMessage?: (messageId: string) => void;
+    onResend?: (message: Message) => void;
     /** All media items in this chat, for gallery navigation */
     mediaItems?: MediaItem[];
     /** Custom admin title for sender */
@@ -194,7 +195,7 @@ interface MessageBubbleProps {
     senderRole?: string;
 }
 
-export const MessageBubble = memo(function MessageBubble({ message, isMe, showTail = true, showSenderName, onContextMenu, onReactionClick, onDoubleClick, onScrollToMessage, mediaItems, senderTitle, senderRole: _senderRole }: MessageBubbleProps) {
+export const MessageBubble = memo(function MessageBubble({ message, isMe, showTail = true, showSenderName, onContextMenu, onReactionClick, onDoubleClick, onScrollToMessage, onResend, mediaItems, senderTitle, senderRole: _senderRole }: MessageBubbleProps) {
     const [viewerOpen, setViewerOpen] = useState(false);
     const time = format(new Date(message.timestamp), 'HH:mm');
     const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -248,12 +249,17 @@ export const MessageBubble = memo(function MessageBubble({ message, isMe, showTa
         message.mediaUrl.includes('.gif') ||
         message.mediaUrl.includes('giphy.com')
     );
+    const isTempMessage = message.id.startsWith('__temp_');
+    const isFreshMessage = Date.now() - new Date(message.timestamp).getTime() < 1300;
+    const shouldAnimateIn = isTempMessage || isFreshMessage;
 
     return (
         <div className={cn("flex flex-col min-w-0 max-w-[85%] sm:max-w-[75%] md:max-w-[55%]", isMe ? "items-end" : "items-start")}>
             <div
                 className={cn(
                     'group relative min-w-[60px] shadow-sm leading-[1.3] transition-[colors,shadow,transform] duration-150 hover:shadow-md active:scale-[0.99] overflow-hidden',
+                    shouldAnimateIn && (isMe ? 'animate-msg-send-in' : 'animate-msg-recv-in'),
+                    message.status === 'sending' && 'animate-msg-sending',
                     tailClass,
                     showTail ? 'mb-0.5' : 'mb-px',
                     isSticker ? 'bg-transparent shadow-none p-0'
@@ -408,7 +414,7 @@ export const MessageBubble = memo(function MessageBubble({ message, isMe, showTa
                                 {message.status === 'sending' ? (
                                     <Clock className="h-3 w-3 animate-pulse" />
                                 ) : message.status === 'error' ? (
-                                    <AlertCircle className="h-3 w-3" />
+                                    <button onClick={(e) => { e.stopPropagation(); onResend?.(message); }} title="Повторить отправку" className="cursor-pointer"><AlertCircle className="h-3 w-3" /></button>
                                 ) : message.status === 'read' ? (
                                     <CheckCheck className="h-3 w-3" />
                                 ) : (
@@ -438,7 +444,7 @@ export const MessageBubble = memo(function MessageBubble({ message, isMe, showTa
                                 {message.status === 'sending' ? (
                                     <Clock className="h-3 w-3 animate-pulse" />
                                 ) : message.status === 'error' ? (
-                                    <AlertCircle className="h-3 w-3" />
+                                    <button onClick={(e) => { e.stopPropagation(); onResend?.(message); }} title="Повторить отправку" className="cursor-pointer"><AlertCircle className="h-3 w-3" /></button>
                                 ) : message.status === 'read' ? (
                                     <CheckCheck className="h-3 w-3" />
                                 ) : (

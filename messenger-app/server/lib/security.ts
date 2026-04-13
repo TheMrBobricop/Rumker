@@ -1,11 +1,11 @@
-import rateLimit from 'express-rate-limit';
+﻿import rateLimit from 'express-rate-limit';
 
 /**
  * Per-endpoint rate limiters for security-sensitive routes.
  * These are stricter than the global rate limit.
  */
 
-// Auth: login — prevent brute force
+// Auth: login пїЅ prevent brute force
 export const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 10, // 10 attempts per 15 min
@@ -14,7 +14,7 @@ export const loginLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-// Auth: register — prevent mass account creation
+// Auth: register пїЅ prevent mass account creation
 export const registerLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
     max: 5, // 5 registrations per hour
@@ -23,7 +23,7 @@ export const registerLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-// Auth: refresh — moderate limit
+// Auth: refresh пїЅ moderate limit
 export const refreshLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 30,
@@ -32,7 +32,7 @@ export const refreshLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-// Upload — prevent abuse
+// Upload пїЅ prevent abuse
 export const uploadLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 50, // 50 uploads per 15 min
@@ -41,7 +41,7 @@ export const uploadLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-// Friend requests — prevent spam
+// Friend requests пїЅ prevent spam
 export const friendRequestLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 20,
@@ -50,7 +50,7 @@ export const friendRequestLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-// Message sending — allow reasonable throughput
+// Message sending пїЅ allow reasonable throughput
 export const messageSendLimiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minute
     max: 60, // 60 messages per minute
@@ -59,7 +59,7 @@ export const messageSendLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-// Telegram auth — prevent abuse of SMS codes
+// Telegram auth пїЅ prevent abuse of SMS codes
 export const telegramAuthLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 5,
@@ -88,3 +88,5 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 export function isValidUUID(val: string): boolean {
     return UUID_REGEX.test(val);
 }
+
+

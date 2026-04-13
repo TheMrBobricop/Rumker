@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { VoiceChannel, VoiceChannelCategory, VoiceChannelParticipant, AudioDevice, VoiceSettings, ConnectionQualityLevel, ConnectionStats, SoundboardSound } from '@/types';
 import { api } from '@/lib/api/client';
@@ -110,7 +110,7 @@ function groupByCategory(channels: any[]): VoiceChannelCategory[] {
         if (!catMap.has(catId)) {
             catMap.set(catId, {
                 id: catId,
-                name: catId === 'general' ? 'Общие' : catId,
+                name: catId === 'general' ? 'Общий' : catId,
                 position: catMap.size,
                 channels: [],
             });
@@ -132,7 +132,7 @@ function groupByCategory(channels: any[]): VoiceChannelCategory[] {
 }
 
 export const useVoiceChannelStore = create<VoiceChannelStore>()(persist((set, get) => ({
-    // Initial state — empty until loadChannels is called
+    // Initial state пїЅ empty until loadChannels is called
     chatId: null,
     categories: [],
     currentChannel: null,
@@ -315,7 +315,7 @@ export const useVoiceChannelStore = create<VoiceChannelStore>()(persist((set, ge
             return;
         }
 
-        // Init WebRTC mic — if fails, still join but muted
+        // Init WebRTC mic пїЅ if fails, still join but muted
         let micFailed = false;
         try {
             const settings = get().voiceSettings;
@@ -434,7 +434,7 @@ export const useVoiceChannelStore = create<VoiceChannelStore>()(persist((set, ge
         await api.patch('/voice-channels/categories/rename', { chatId, oldName, newName });
         set((state) => ({
             categories: state.categories.map(cat =>
-                cat.id === oldName ? { ...cat, id: newName, name: newName === 'general' ? 'Общие' : newName } : cat
+                cat.id === oldName ? { ...cat, id: newName, name: newName === 'general' ? 'Общий' : newName } : cat
             ),
         }));
     },
@@ -523,3 +523,5 @@ export const useVoiceChannelStore = create<VoiceChannelStore>()(persist((set, ge
         userVolumes: state.userVolumes,
     }),
 }));
+
+

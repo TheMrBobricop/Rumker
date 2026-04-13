@@ -1,10 +1,10 @@
-
+﻿
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { toast } from 'sonner';
-import { Search, MoreVertical, ArrowLeft, Phone, MessageSquare, Image, ChevronDown, X, Copy, Trash2, Forward, Check, BellOff, Bell, Info } from 'lucide-react';
+import { Search, MoreVertical, ArrowLeft, Phone, MessageSquare, Image, ChevronDown, X, Copy, Trash2, Forward, Check, BellOff, Bell, Info, Pin } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
     DropdownMenu,
@@ -18,9 +18,10 @@ import { MessageBubble } from './MessageBubble';
 import { MessageInput } from './MessageInput';
 import { MessageContextMenu, type ReadByUser } from './MessageContextMenu';
 import { PinnedMessageBar } from './PinnedMessageBar';
+import { PinnedMessagesPanel } from './PinnedMessagesPanel';
 import { ContactPicker } from './ContactPicker';
 import { UserProfilePanel } from '@/components/users/UserProfilePanel';
-import { uploadChatFile, markMessagesRead, pinMessage as apiPinMessage, unpinMessage as apiUnpinMessage, unpinAllMessages as apiUnpinAll, searchMessages, deleteChat as apiDeleteChat, getReadReceipts } from '@/lib/api/chats';
+import { uploadChatFile, markMessagesRead, pinMessage as apiPinMessage, unpinMessage as apiUnpinMessage, unpinAllMessages as apiUnpinAll, searchMessages, getMessagesAround, deleteChat as apiDeleteChat, getReadReceipts } from '@/lib/api/chats';
 import { createPoll } from '@/lib/api/polls';
 import { socketService } from '@/lib/socket';
 import { useCallStore } from '@/stores/callStore';
@@ -29,6 +30,7 @@ import { useSwipeBack } from '@/lib/hooks/useSwipeBack';
 import { playMessageSendSound } from '@/lib/notifications';
 import { cn } from '@/lib/utils';
 import { getUserColor } from '@/lib/userColors';
+import { useAnimatedMount, ANIM_MODAL, ANIM_BACKDROP } from '@/lib/hooks/useAnimatedMount';
 import type { Message, Sticker } from '@/types';
 import type { EditingMessage } from './MessageInput';
 import type { MediaItem } from '@/components/media/MediaViewer';
@@ -37,6 +39,17 @@ import type { MediaItem } from '@/components/media/MediaViewer';
 const PollCreator = lazy(() => import('./PollCreator').then(m => ({ default: m.PollCreator })));
 const GifPicker = lazy(() => import('./GifPicker').then(m => ({ default: m.GifPicker })));
 const GroupInfoPanel = lazy(() => import('./GroupInfoPanel').then(m => ({ default: m.GroupInfoPanel })));
+
+/** Animated typing dots (Telegram-style bouncing) */
+function TypingDots() {
+    return (
+        <span className="inline-flex items-center gap-[2px] ml-1">
+            <span className="typing-dot w-[4px] h-[4px] rounded-full bg-current" />
+            <span className="typing-dot w-[4px] h-[4px] rounded-full bg-current" />
+            <span className="typing-dot w-[4px] h-[4px] rounded-full bg-current" />
+        </span>
+    );
+}
 
 interface ChatWindowProps {
     onBack?: () => void;
@@ -81,7 +94,7 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
     const [chatReady, setChatReady] = useState(true);
     const chatReadyRef = useRef(true);
 
-    // Track which chats have had their initial load attempt — prevents "Нет сообщений" flash
+    // Track which chats have had their initial load attempt — prevents empty-state flash
     const loadedChatsRef = useRef<Set<string>>(new Set());
 
     // Ref to avoid re-registering scroll listener when scroll-down button toggles
@@ -110,7 +123,7 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
     // Pinned messages — from centralized store
     const pinnedMessagesMap = useChatStore((s) => s.pinnedMessages);
     const pinnedMessages = useMemo(() => pinnedMessagesMap[activeChat?.id || ''] ?? [], [pinnedMessagesMap, activeChat?.id]);
-    const [pinnedBarDismissed, setPinnedBarDismissed] = useState(false);
+    const [pinnedPanelOpen, setPinnedPanelOpen] = useState(false);
 
     // Selection mode
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
@@ -133,9 +146,13 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
 
     // Delete confirmation
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const { mounted: delBdMounted, className: delBdClass } = useAnimatedMount(showDeleteConfirm, ANIM_BACKDROP);
+    const { mounted: delMdMounted, className: delMdClass } = useAnimatedMount(showDeleteConfirm, ANIM_MODAL);
 
     // Forward dialog
     const [showForwardDialog, setShowForwardDialog] = useState(false);
+    const { mounted: fwdBdMounted, className: fwdBdClass } = useAnimatedMount(showForwardDialog, ANIM_BACKDROP);
+    const { mounted: fwdMdMounted, className: fwdMdClass } = useAnimatedMount(showForwardDialog, ANIM_MODAL);
 
     // Attachment menu modals
     const [showPollCreator, setShowPollCreator] = useState(false);
@@ -234,7 +251,7 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
 
             chatState.clearUnread(activeChat.id);
             // Load pinned messages from centralized store
-            setPinnedBarDismissed(false);
+            setPinnedPanelOpen(false);
             chatState.loadPinnedMessages(activeChat.id);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -360,7 +377,7 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
     type VirtualItemData =
         | { kind: 'date-separator'; date: Date; key: string }
         | { kind: 'unread-divider'; count: number; key: string }
-        | { kind: 'message'; msg: Message; index: number; isMe: boolean; showTail: boolean; showAvatar: boolean; showSenderName: boolean; isSelected: boolean; shouldAnimate: boolean; isSending: boolean; key: string };
+        | { kind: 'message'; msg: Message; index: number; isMe: boolean; showTail: boolean; showAvatar: boolean; showSenderName: boolean; isFirstInGroup: boolean; isSelected: boolean; shouldAnimate: boolean; isSending: boolean; key: string };
 
     const virtualItems = useMemo<VirtualItemData[]>(() => {
         if (!activeChat) return [];
@@ -401,9 +418,11 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
             const isNewMsg = isNewMessageAdded && i >= prevCount;
             const shouldAnim = !selectionMode && (isSending || isNewMsg);
 
+            const isFirstInGroup = !prev || prev.senderId !== msg.senderId || showDateSep || !!showUnreadDiv;
+
             items.push({
                 kind: 'message', msg, index: i, isMe, showTail,
-                showAvatar: showAv, showSenderName: showSender,
+                showAvatar: showAv, showSenderName: showSender, isFirstInGroup,
                 isSelected: isSel, shouldAnimate: shouldAnim, isSending, key: msg.id,
             });
         }
@@ -750,7 +769,6 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
         try {
             await apiPinMessage(activeChat.id, message.id);
             await useChatStore.getState().loadPinnedMessages(activeChat.id);
-            setPinnedBarDismissed(false);
             toast.success('Сообщение закреплено');
         } catch {
             toast.error('Не удалось закрепить');
@@ -779,7 +797,7 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
         }
     }, [activeChat]);
 
-    const handleScrollToMessage = useCallback((messageId: string) => {
+    const handleScrollToMessage = useCallback(async (messageId: string) => {
         // Temporarily disable auto-scroll so it doesn't yank us back to bottom
         isNearBottomRef.current = false;
 
@@ -797,8 +815,30 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
         if (el) {
             el.scrollIntoView({ block: 'center' });
             requestAnimationFrame(highlight);
+            return;
         }
-    }, []);
+
+        // Message not in DOM — load messages around it from backend
+        if (!activeChat) return;
+        try {
+            const aroundMessages = await getMessagesAround(activeChat.id, messageId);
+            if (aroundMessages.length > 0) {
+                useChatStore.getState().setMessages(activeChat.id, aroundMessages);
+                // Wait for DOM to render, then scroll
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        const loaded = document.getElementById(`msg-${messageId}`);
+                        if (loaded) {
+                            loaded.scrollIntoView({ block: 'center' });
+                            highlight();
+                        }
+                    });
+                });
+            }
+        } catch {
+            toast.error('Не удалось загрузить сообщение');
+        }
+    }, [activeChat]);
 
     // --- Sticker handler ---
     const handleSendSticker = useCallback(async (sticker: Sticker) => {
@@ -892,6 +932,7 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
     // --- Group info handler ---
     const handleGroupInfo = useCallback(() => {
         if (!activeChat) return;
+        setPinnedPanelOpen(false);
         if (activeChat.type === 'private') {
             const otherParticipant = activeChat.participants.find(
                 (p) => p.userId !== currentUser?.id
@@ -906,6 +947,12 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
             setGroupInfoOpen(true);
         }
     }, [activeChat, currentUser]);
+
+    const openPinnedPanel = useCallback(() => {
+        setProfileOpen(false);
+        setGroupInfoOpen(false);
+        setPinnedPanelOpen(true);
+    }, []);
 
     // --- Mute handler ---
     const handleToggleMute = useCallback(() => {
@@ -1042,7 +1089,7 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
         }
     }, [activeChat]);
 
-    // ── Drag-and-drop file handlers ──
+    // --- Drag-and-drop file handlers ---
 
     const handleDragEnter = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -1088,7 +1135,7 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                 <div>
                     <p className="text-lg font-semibold text-tg-text">Rumker Messenger</p>
                     <p className="text-sm text-tg-text-secondary mt-1.5 max-w-[280px]">
-                        Выберите чат из списка слева или найдите пользователя через поиск
+                        Выберите чат слева или начните новый диалог.
                     </p>
                 </div>
             </div>
@@ -1170,11 +1217,11 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
         }
     };
 
-    const panelOpen = profileOpen || groupInfoOpen;
+    const panelOpen = profileOpen || groupInfoOpen || pinnedPanelOpen;
 
     return (
         <div className="flex h-full overflow-hidden">
-        {/* ── Chat Area ── */}
+        {/* Chat Area */}
         <div
             ref={swipeRef}
             className="flex-1 flex flex-col bg-tg-bg relative overflow-hidden min-w-0"
@@ -1221,8 +1268,8 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                 </header>
             ) : (
                 /* Chat Header */
-                <header className="flex h-14 items-center justify-between border-b border-tg-divider bg-tg-header px-2 sm:px-4 text-white shrink-0">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                <header className="flex h-14 items-center border-b border-tg-divider bg-tg-header px-2 sm:px-4 text-white shrink-0">
+                    <div className="flex items-center gap-2 min-w-0 shrink">
                         {onBack && (
                             <button
                                 onClick={onBack}
@@ -1255,11 +1302,11 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                                         }).filter(Boolean);
 
                                         if (typingUserNames.length === 1) {
-                                            return <span className="text-green-300">{typingUserNames[0]} печатает...</span>;
+                                            return <span className="text-green-300">{typingUserNames[0]} печатает<TypingDots /></span>;
                                         } else if (typingUserNames.length === 2) {
-                                            return <span className="text-green-300">{typingUserNames[0]} и {typingUserNames[1]} печатают...</span>;
+                                            return <span className="text-green-300">{typingUserNames[0]} и {typingUserNames[1]} печатают<TypingDots /></span>;
                                         } else {
-                                            return <span className="text-green-300">{typingUserNames.length} пользователя печатают...</span>;
+                                            return <span className="text-green-300">{typingUserNames.length} пользователя печатают<TypingDots /></span>;
                                         }
                                     }
                                     if (activeChat.type === 'private') {
@@ -1282,7 +1329,18 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
 
                     </div>
 
-                    <div className="flex items-center shrink-0">
+                    <div className="hidden sm:flex flex-1 items-center justify-center min-w-0 px-2">
+                        {pinnedMessages.length > 0 && (
+                            <PinnedMessageBar
+                                pinnedMessages={pinnedMessages}
+                                onOpenPanel={openPinnedPanel}
+                                showSender={activeChat.type !== 'private'}
+                                className="w-full max-w-[520px] px-2 py-1.5"
+                            />
+                        )}
+                    </div>
+
+                    <div className="flex items-center justify-end shrink-0">
                         <button
                             onClick={handleSearchOpen}
                             className="h-10 w-10 flex items-center justify-center rounded-full text-white hover:bg-white/10 active:bg-white/20 transition-colors"
@@ -1290,6 +1348,15 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                         >
                             <Search className="h-5 w-5" />
                         </button>
+                        {pinnedMessages.length > 0 && (
+                            <button
+                                onClick={openPinnedPanel}
+                                className="h-10 w-10 flex items-center justify-center rounded-full text-white hover:bg-white/10 active:bg-white/20 transition-colors"
+                                title="Закрепленные сообщения"
+                            >
+                                <Pin className="h-5 w-5" />
+                            </button>
+                        )}
                         {activeChat.type === 'private' && (
                             <button
                                 onClick={handleCall}
@@ -1315,6 +1382,12 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                                     <Search className="h-4 w-4 mr-2" />
                                     Поиск сообщений
                                 </DropdownMenuItem>
+                                {pinnedMessages.length > 0 && (
+                                    <DropdownMenuItem onClick={openPinnedPanel}>
+                                        <Pin className="h-4 w-4 mr-2" />
+                                        Закрепленные сообщения
+                                    </DropdownMenuItem>
+                                )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={handleToggleMute}>
                                     {isChatMuted ? (
@@ -1391,17 +1464,6 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                 </div>
             )}
 
-            {/* Telegram-style pinned message bar — always visible when pins exist */}
-            {!pinnedBarDismissed && pinnedMessages.length > 0 && !selectionMode && (
-                <PinnedMessageBar
-                    pinnedMessages={pinnedMessages}
-                    onScrollToMessage={handleScrollToMessage}
-                    onClose={() => setPinnedBarDismissed(true)}
-                    onUnpinAll={handleUnpinAll}
-                    canUnpin={canPinMessages || activeChat?.type === 'private'}
-                />
-            )}
-
             {/* Messages + Input area — both on top of background */}
             <div className="flex-1 relative overflow-hidden">
                 {/* Background layer — stays fixed, never scrolls */}
@@ -1445,12 +1507,6 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                             </div>
                         )}
 
-                        {!isLoadingMessages && chatMessages.length === 0 && activeChat && loadedChatsRef.current.has(activeChat.id) && (
-                            <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
-                                Нет сообщений. Начните диалог!
-                            </div>
-                        )}
-
                         {virtualItems.length > 0 && (
                             <div className="flex flex-col justify-end" style={{ width: '100%', minHeight: '100%' }}>
                                 {virtualItems.map((item) => {
@@ -1474,13 +1530,16 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                                                 <div id="unread-divider" className="flex items-center gap-3 py-2 px-4">
                                                     <div className="flex-1 h-px bg-tg-primary/40" />
                                                     <span className="text-xs font-medium text-tg-primary whitespace-nowrap">
-                                                        {item.count} непрочитанн{item.count === 1 ? 'ое' : item.count < 5 ? 'ых' : 'ых'}
+                                                        {item.count} непрочитанных
                                                     </span>
                                                     <div className="flex-1 h-px bg-tg-primary/40" />
                                                 </div>
                                             )}
                                             {item.kind === 'message' && (
-                                                <div className={cn("px-3 sm:px-4 max-w-3xl mx-auto w-full", appearance.compactMode ? "" : "py-px")}>
+                                                <div className={cn(
+                                                    "px-3 sm:px-4 max-w-3xl mx-auto w-full",
+                                                    appearance.compactMode ? "" : (item.isFirstInGroup ? "pt-1.5" : "pt-px")
+                                                )}>
                                                     <div
                                                         className={cn(
                                                             "flex w-full items-center relative chat-message-row",
@@ -1545,6 +1604,9 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                                                                 onContextMenu={handleContextMenu}
                                                                 onDoubleClick={handleReply}
                                                                 onScrollToMessage={handleScrollToMessage}
+                                                                onResend={(msg) => {
+                                                                    useChatStore.getState().resendMessage(activeChat.id, msg.id);
+                                                                }}
                                                                 onReactionClick={(messageId, emoji) => {
                                                                     if (currentUser) {
                                                                         useChatStore.getState().toggleReaction(activeChat.id, messageId, emoji, currentUser.id);
@@ -1682,9 +1744,9 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
             })()}
 
             {/* Delete Chat Confirmation */}
-            {showDeleteConfirm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-backdrop-in" onClick={() => setShowDeleteConfirm(false)}>
-                    <div className="bg-card rounded-xl p-6 mx-4 max-w-sm w-full shadow-xl animate-fade-scale-in" onClick={(e) => e.stopPropagation()}>
+            {(delBdMounted || delMdMounted) && (
+                <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 ${delBdClass}`} onClick={() => setShowDeleteConfirm(false)}>
+                    <div className={`bg-card rounded-xl p-6 mx-4 max-w-sm w-full shadow-xl ${delMdClass}`} onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-lg font-semibold text-tg-text mb-2">Удалить чат</h3>
                         <p className="text-sm text-tg-text-secondary mb-4">
                             Вы уверены, что хотите удалить этот чат? Это действие нельзя отменить.
@@ -1700,7 +1762,7 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                                 onClick={handleDeleteChat}
                                 className="px-4 py-2 text-sm rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
                             >
-                                Удалить
+                                Удалено
                             </button>
                         </div>
                     </div>
@@ -1708,10 +1770,12 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
             )}
 
             {/* Forward Dialog */}
-            {showForwardDialog && (
+            {(fwdBdMounted || fwdMdMounted) && (
                 <ForwardDialog
                     onSelect={handleForwardSelected}
                     onClose={() => setShowForwardDialog(false)}
+                    backdropClass={fwdBdClass}
+                    modalClass={fwdMdClass}
                 />
             )}
 
@@ -1745,7 +1809,7 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
             )}
         </div>
 
-        {/* ── Profile / Group Info Panel ── */}
+        {/* Profile / Group Info Panel */}
         {isDesktop ? (
             /* Desktop: inline panel with smooth width transition */
             <div
@@ -1762,6 +1826,18 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                         open={profileOpen}
                         onClose={() => setProfileOpen(false)}
                         onScrollToMessage={handleScrollToMessage}
+                    />
+                )}
+                {pinnedPanelOpen && !profileOpen && !groupInfoOpen && (
+                    <PinnedMessagesPanel
+                        inline
+                        open={pinnedPanelOpen}
+                        pinnedMessages={pinnedMessages}
+                        onClose={() => setPinnedPanelOpen(false)}
+                        onJumpToMessage={handleScrollToMessage}
+                        onUnpin={handleUnpinMessage}
+                        onUnpinAll={handleUnpinAll}
+                        canUnpin={canPinMessages || activeChat?.type === 'private'}
                     />
                 )}
                 {groupInfoOpen && !profileOpen && (
@@ -1791,6 +1867,15 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                     open={profileOpen}
                     onClose={() => setProfileOpen(false)}
                     onScrollToMessage={handleScrollToMessage}
+                />
+                <PinnedMessagesPanel
+                    open={pinnedPanelOpen}
+                    pinnedMessages={pinnedMessages}
+                    onClose={() => setPinnedPanelOpen(false)}
+                    onJumpToMessage={handleScrollToMessage}
+                    onUnpin={handleUnpinMessage}
+                    onUnpinAll={handleUnpinAll}
+                    canUnpin={canPinMessages || activeChat?.type === 'private'}
                 />
                 {groupInfoOpen && (
                     <Suspense fallback={null}>
@@ -1833,7 +1918,7 @@ function formatDateSeparator(date: Date): string {
 }
 
 /** Simple forward dialog — picks a chat to forward to */
-function ForwardDialog({ onSelect, onClose }: { onSelect: (chatId: string) => void; onClose: () => void }) {
+function ForwardDialog({ onSelect, onClose, backdropClass, modalClass }: { onSelect: (chatId: string) => void; onClose: () => void; backdropClass?: string; modalClass?: string }) {
     const chats = useChatStore((s) => s.chats);
     const activeChat = useChatStore((s) => s.activeChat);
     const [filter, setFilter] = useState('');
@@ -1845,8 +1930,8 @@ function ForwardDialog({ onSelect, onClose }: { onSelect: (chatId: string) => vo
     });
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-backdrop-in" onClick={onClose}>
-            <div className="bg-card rounded-xl mx-4 max-w-sm w-full shadow-xl animate-fade-scale-in overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 ${backdropClass || 'animate-backdrop-in'}`} onClick={onClose}>
+            <div className={`bg-card rounded-xl mx-4 max-w-sm w-full shadow-xl ${modalClass || 'animate-fade-scale-in'} overflow-hidden`} onClick={(e) => e.stopPropagation()}>
                 <div className="p-4 border-b border-tg-divider">
                     <h3 className="text-lg font-semibold text-tg-text mb-2">Переслать в...</h3>
                     <input
@@ -1888,3 +1973,22 @@ function ForwardDialog({ onSelect, onClose }: { onSelect: (chatId: string) => vo
         </div>
     );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

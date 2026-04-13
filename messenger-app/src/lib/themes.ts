@@ -1,4 +1,4 @@
-export interface ThemePreset {
+﻿export interface ThemePreset {
     id: string;
     name: string;
     description: string;
@@ -24,7 +24,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     {
         id: 'classic',
         name: 'Classic',
-        description: 'Rumker по умолчанию',
+        description: 'Фирменная светлая тема Rumker',
         isDark: false,
         preview: {
             header: '#5a8a9a',
@@ -87,7 +87,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     {
         id: 'ocean',
         name: 'Ocean',
-        description: 'Telegram-стиль',
+        description: 'Светлая тема в стиле Telegram',
         isDark: false,
         preview: {
             header: '#3390ec',
@@ -150,7 +150,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     {
         id: 'midnight',
         name: 'Midnight',
-        description: 'Тёмная с фиолетовым',
+        description: 'Темная тема для ночного режима',
         isDark: true,
         preview: {
             header: '#1a1a2e',
@@ -213,7 +213,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     {
         id: 'rose',
         name: 'Rose',
-        description: 'Тёплый розовый',
+        description: 'Светлая тема с розовыми акцентами',
         isDark: false,
         preview: {
             header: '#e8788a',
@@ -276,7 +276,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     {
         id: 'sunset',
         name: 'Sunset',
-        description: 'Оранжевый и тёплый',
+        description: 'Теплая тема с мягкими тонами',
         isDark: false,
         preview: {
             header: '#e67e22',
@@ -349,3 +349,5 @@ export function applyThemePreset(presetId: string) {
         root.style.setProperty(varName, value);
     }
 }
+
+

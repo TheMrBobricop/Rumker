@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, X, Smile, TreePine, UtensilsCrossed, Plane, Dumbbell, Lightbulb, Hash, Flag, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { validateBody, createVoiceChannelSchema, updateVoiceChannelSchema, renameCategorySchema, deleteCategorySchema, reorderCategoriesSchema, reorderChannelsSchema } from '../lib/validation.js';
@@ -16,7 +16,7 @@ async function requireChatMember(chatId: string, userId: string, res: any): Prom
 
 const router = Router();
 
-// GET /voice-channels/all — list all voice channels across user's group chats
+// GET /voice-channels/all пїЅ list all voice channels across user's group chats
 router.get('/all', authenticateToken, async (req: AuthRequest, res) => {
     try {
         const userId = req.user?.userId;
@@ -98,7 +98,7 @@ router.get('/all', authenticateToken, async (req: AuthRequest, res) => {
     }
 });
 
-// GET /voice-channels?chatId=xxx — list channels for a chat, with participants
+// GET /voice-channels?chatId=xxx пїЅ list channels for a chat, with participants
 router.get('/', authenticateToken, async (req: AuthRequest, res) => {
     try {
         const chatId = req.query.chatId as string;
@@ -158,7 +158,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res) => {
     }
 });
 
-// POST /voice-channels — create a channel
+// POST /voice-channels пїЅ create a channel
 router.post('/', authenticateToken, validateBody(createVoiceChannelSchema), async (req: AuthRequest, res) => {
     try {
         const userId = req.user?.userId;
@@ -221,7 +221,7 @@ router.post('/', authenticateToken, validateBody(createVoiceChannelSchema), asyn
 
 // --- Category routes MUST be before /:channelId to avoid wildcard matching "categories" ---
 
-// PATCH /voice-channels/categories/rename — rename a category (batch update all channels with old name)
+// PATCH /voice-channels/categories/rename пїЅ rename a category (batch update all channels with old name)
 router.patch('/categories/rename', authenticateToken, validateBody(renameCategorySchema), async (req: AuthRequest, res) => {
     try {
         const { chatId, oldName, newName } = req.body;
@@ -250,7 +250,7 @@ router.patch('/categories/rename', authenticateToken, validateBody(renameCategor
     }
 });
 
-// PATCH /voice-channels/categories/reorder — set position of channels within a category
+// PATCH /voice-channels/categories/reorder пїЅ set position of channels within a category
 router.patch('/categories/reorder', authenticateToken, validateBody(reorderCategoriesSchema), async (req: AuthRequest, res) => {
     try {
         const { chatId, categoryOrder } = req.body;
@@ -287,7 +287,7 @@ router.patch('/categories/reorder', authenticateToken, validateBody(reorderCateg
     }
 });
 
-// POST /voice-channels/categories/delete — delete a category and all its channels
+// POST /voice-channels/categories/delete пїЅ delete a category and all its channels
 router.post('/categories/delete', authenticateToken, validateBody(deleteCategorySchema), async (req: AuthRequest, res) => {
     try {
         const { chatId, category } = req.body;
@@ -325,7 +325,7 @@ router.post('/categories/delete', authenticateToken, validateBody(deleteCategory
     }
 });
 
-// PATCH /voice-channels/reorder — reorder channels (drag-and-drop)
+// PATCH /voice-channels/reorder пїЅ reorder channels (drag-and-drop)
 router.patch('/reorder', authenticateToken, validateBody(reorderChannelsSchema), async (req: AuthRequest, res) => {
     try {
         const { chatId, channels } = req.body;
@@ -352,7 +352,7 @@ router.patch('/reorder', authenticateToken, validateBody(reorderChannelsSchema),
 
 // --- Wildcard routes AFTER category routes ---
 
-// PATCH /voice-channels/:channelId — update name/description
+// PATCH /voice-channels/:channelId пїЅ update name/description
 router.patch('/:channelId', authenticateToken, validateBody(updateVoiceChannelSchema), async (req: AuthRequest, res) => {
     try {
         const { channelId } = req.params;
@@ -384,7 +384,7 @@ router.patch('/:channelId', authenticateToken, validateBody(updateVoiceChannelSc
     }
 });
 
-// DELETE /voice-channels/:channelId — delete a channel
+// DELETE /voice-channels/:channelId пїЅ delete a channel
 router.delete('/:channelId', authenticateToken, async (req: AuthRequest, res) => {
     try {
         const { channelId } = req.params;
@@ -415,3 +415,5 @@ router.delete('/:channelId', authenticateToken, async (req: AuthRequest, res) =>
 });
 
 export default router;
+
+

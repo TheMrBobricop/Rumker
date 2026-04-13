@@ -1,7 +1,7 @@
-
 import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';
+import { useAuthStore } from '@/stores/authStore';
 import { ChatList } from '@/components/chat/ChatList';
 import { ChatWindow } from '@/components/chat/ChatWindow';
 import { MainMenu } from '@/components/menu/MainMenu';
@@ -17,6 +17,7 @@ import { mediaCache } from '@/lib/cache/mediaCacheManager';
 import { useSocket } from '@/lib/hooks/useSocket';
 import { requestNotificationPermission, updateDocumentTitle } from '@/lib/notifications';
 import { api } from '@/lib/api/client';
+import { tokenStorage } from '@/lib/tokenStorage';
 import { IncomingCallModal } from '@/components/call/IncomingCallModal';
 import { ActiveCallOverlay } from '@/components/call/ActiveCallOverlay';
 import { VoiceChannelOverlay } from '@/components/voice/VoiceChannelOverlay';
@@ -25,6 +26,8 @@ import { VoiceChannelPanel } from '@/components/voice/VoiceChannelPanel';
 import { VoiceStreamPiP } from '@/components/voice/VoiceStreamPiP';
 import { useVoiceChannelStore } from '@/stores/voiceChannelStore';
 import type { Chat } from '@/types';
+
+const TAB_ORDER: Array<'chats' | 'friends' | 'voice'> = ['chats', 'friends', 'voice'];
 
 export function MessengerPage() {
     const appearance = useSettingsStore((s) => s.appearance);
@@ -38,8 +41,11 @@ export function MessengerPage() {
     const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
     const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
     const [activeTab, setActiveTab] = useState<'chats' | 'friends' | 'voice'>('chats');
+    const [tabAnimDirection, setTabAnimDirection] = useState<'left' | 'right'>('left');
     const [showSearch, setShowSearch] = useState(false);
     const delayedClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const tabSwipeStartRef = useRef<{ x: number; y: number; pointerType: 'mouse' | 'touch' | 'pen' } | null>(null);
+    const wheelSwipeLockRef = useRef(0);
 
     // Resizable sidebar (desktop only)
     const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -56,11 +62,12 @@ export function MessengerPage() {
         requestNotificationPermission();
     }, []);
 
-    // Proactive token refresh on mount — prevents stale token logouts
+    // Proactive token refresh on mount prevents stale token logouts
     useEffect(() => {
-        // Refresh token передаётся через httpOnly cookie автоматически
+        // Refresh token is sent via httpOnly cookie automatically
         api.get('/auth/me').catch(() => {
-            // Token expired — the api client will auto-refresh via cookie
+            useAuthStore.getState().logout();
+            tokenStorage.setToken(null);
         });
     }, []);
 
@@ -95,7 +102,7 @@ export function MessengerPage() {
             setActiveTab('chats');
             if (isMobile) setMobileView('chat');
         } catch {
-            toast.error('Не удалось открыть чат');
+            toast.error('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043a\u0440\u044b\u0442\u044c \u0447\u0430\u0442');
         }
     }, [setActiveChat, loadChats, isMobile]);
 
@@ -184,6 +191,83 @@ export function MessengerPage() {
         useVoiceChannelStore.getState().setViewingChannel(null);
         if (isMobile) setMobileView('list');
     }, [isMobile]);
+
+    const switchTab = useCallback((nextTab: 'chats' | 'friends' | 'voice') => {
+        if (nextTab === activeTab) return;
+        const currentIndex = TAB_ORDER.indexOf(activeTab);
+        const nextIndex = TAB_ORDER.indexOf(nextTab);
+        setTabAnimDirection(nextIndex > currentIndex ? 'left' : 'right');
+        setActiveTab(nextTab);
+    }, [activeTab]);
+
+    const beginSwipe = useCallback((x: number, y: number, pointerType: 'mouse' | 'touch' | 'pen') => {
+        tabSwipeStartRef.current = { x, y, pointerType };
+    }, []);
+
+    const finishSwipe = useCallback((x: number, y: number) => {
+        const start = tabSwipeStartRef.current;
+        tabSwipeStartRef.current = null;
+        if (!start) return;
+
+        const dx = x - start.x;
+        const dy = y - start.y;
+        const threshold = start.pointerType === 'mouse' ? 90 : 60;
+        if (Math.abs(dx) < threshold || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+
+        const currentIndex = TAB_ORDER.indexOf(activeTab);
+        if (dx < 0 && currentIndex < TAB_ORDER.length - 1) {
+            switchTab(TAB_ORDER[currentIndex + 1]);
+        } else if (dx > 0 && currentIndex > 0) {
+            switchTab(TAB_ORDER[currentIndex - 1]);
+        }
+    }, [activeTab, switchTab]);
+
+    const canStartSwipe = (target: EventTarget | null) => {
+        if (!(target instanceof Element)) return true;
+        return !target.closest('button,a,input,textarea,select,label,[role="button"],[data-no-tab-swipe="true"]');
+    };
+
+    const onTabTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+        const touch = e.changedTouches[0];
+        beginSwipe(touch.clientX, touch.clientY, 'touch');
+    }, [beginSwipe]);
+
+    const onTabTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+        const touch = e.changedTouches[0];
+        finishSwipe(touch.clientX, touch.clientY);
+    }, [finishSwipe]);
+
+    const onTabPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.pointerType === 'mouse') return;
+        if (!canStartSwipe(e.target)) return;
+        beginSwipe(e.clientX, e.clientY, (e.pointerType as 'mouse' | 'touch' | 'pen') || 'mouse');
+    }, [beginSwipe]);
+
+    const onTabPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.pointerType === 'mouse') return;
+        finishSwipe(e.clientX, e.clientY);
+    }, [finishSwipe]);
+
+    const onTabPointerCancel = useCallback(() => {
+        tabSwipeStartRef.current = null;
+    }, []);
+
+    const onTabWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+        if (Math.abs(e.deltaX) < 32 || Math.abs(e.deltaX) < Math.abs(e.deltaY) * 1.2) return;
+
+        const now = Date.now();
+        if (now - wheelSwipeLockRef.current < 260) return;
+        wheelSwipeLockRef.current = now;
+
+        const currentIndex = TAB_ORDER.indexOf(activeTab);
+        if (e.deltaX > 0 && currentIndex < TAB_ORDER.length - 1) {
+            switchTab(TAB_ORDER[currentIndex + 1]);
+            e.preventDefault();
+        } else if (e.deltaX < 0 && currentIndex > 0) {
+            switchTab(TAB_ORDER[currentIndex - 1]);
+            e.preventDefault();
+        }
+    }, [activeTab, switchTab]);
 
     const handleBack = useCallback(() => {
         setMobileView('list');
@@ -287,7 +371,7 @@ export function MessengerPage() {
                         {/* Tabs */}
                         <div className="flex border-b border-border">
                             <button
-                                onClick={() => setActiveTab('chats')}
+                                onClick={() => switchTab('chats')}
                                 className={cn(
                                     'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors relative',
                                     activeTab === 'chats'
@@ -302,7 +386,7 @@ export function MessengerPage() {
                                 )}
                             </button>
                             <button
-                                onClick={() => setActiveTab('friends')}
+                                onClick={() => switchTab('friends')}
                                 className={cn(
                                     'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors relative',
                                     activeTab === 'friends'
@@ -317,7 +401,7 @@ export function MessengerPage() {
                                 )}
                             </button>
                             <button
-                                onClick={() => setActiveTab('voice')}
+                                onClick={() => switchTab('voice')}
                                 className={cn(
                                     'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors relative',
                                     activeTab === 'voice'
@@ -334,15 +418,19 @@ export function MessengerPage() {
                         </div>
 
                         {/* Content */}
-                        <div className="flex-1 overflow-hidden relative">
-                            <div className={cn("h-full", activeTab !== 'chats' && "hidden")}>
-                                <ChatList className="h-full" />
-                            </div>
-                            <div className={cn("h-full", activeTab !== 'friends' && "hidden")}>
-                                <FriendsList onMessageFriend={(userId) => openOrCreateChat(userId)} />
-                            </div>
-                            <div className={cn("h-full", activeTab !== 'voice' && "hidden")}>
-                                <VoiceChannelsTab className="h-full" onOpenChat={openOrCreateChat} />
+                        <div
+                            className="flex-1 overflow-hidden relative"
+                            onTouchStart={onTabTouchStart}
+                            onTouchEnd={onTabTouchEnd}
+                            onPointerDown={onTabPointerDown}
+                            onPointerUp={onTabPointerUp}
+                            onPointerCancel={onTabPointerCancel}
+                            onWheel={onTabWheel}
+                        >
+                            <div key={`${activeTab}-${tabAnimDirection}-m`} className={cn("h-full", tabAnimDirection === 'left' ? 'animate-tab-swipe-in-left' : 'animate-tab-swipe-in-right')}>
+                                {activeTab === 'chats' && <ChatList className="h-full" />}
+                                {activeTab === 'friends' && <FriendsList onMessageFriend={(userId) => openOrCreateChat(userId)} />}
+                                {activeTab === 'voice' && <VoiceChannelsTab className="h-full" onOpenChat={openOrCreateChat} />}
                             </div>
                             {activeTab !== 'voice' && <NewChatFAB onChatCreated={handleChatCreated} />}
                         </div>
@@ -409,7 +497,7 @@ export function MessengerPage() {
                 {/* Tabs */}
                 <div className="flex border-b border-border">
                     <button
-                        onClick={() => setActiveTab('chats')}
+                        onClick={() => switchTab('chats')}
                         className={cn(
                             'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors relative',
                             activeTab === 'chats'
@@ -424,7 +512,7 @@ export function MessengerPage() {
                         )}
                     </button>
                     <button
-                        onClick={() => setActiveTab('friends')}
+                        onClick={() => switchTab('friends')}
                         className={cn(
                             'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors relative',
                             activeTab === 'friends'
@@ -439,7 +527,7 @@ export function MessengerPage() {
                         )}
                     </button>
                     <button
-                        onClick={() => setActiveTab('voice')}
+                        onClick={() => switchTab('voice')}
                         className={cn(
                             'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors relative',
                             activeTab === 'voice'
@@ -456,15 +544,19 @@ export function MessengerPage() {
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-hidden relative">
-                    <div className={cn("h-full", activeTab !== 'chats' && "hidden")}>
-                        <ChatList className="h-full" />
-                    </div>
-                    <div className={cn("h-full", activeTab !== 'friends' && "hidden")}>
-                        <FriendsList onMessageFriend={(userId) => openOrCreateChat(userId)} />
-                    </div>
-                    <div className={cn("h-full", activeTab !== 'voice' && "hidden")}>
-                        <VoiceChannelsTab className="h-full" onOpenChat={openOrCreateChat} />
+                <div
+                    className="flex-1 overflow-hidden relative"
+                    onTouchStart={onTabTouchStart}
+                    onTouchEnd={onTabTouchEnd}
+                    onPointerDown={onTabPointerDown}
+                    onPointerUp={onTabPointerUp}
+                    onPointerCancel={onTabPointerCancel}
+                    onWheel={onTabWheel}
+                >
+                    <div key={`${activeTab}-${tabAnimDirection}-d`} className={cn("h-full", tabAnimDirection === 'left' ? 'animate-tab-swipe-in-left' : 'animate-tab-swipe-in-right')}>
+                        {activeTab === 'chats' && <ChatList className="h-full" />}
+                        {activeTab === 'friends' && <FriendsList onMessageFriend={(userId) => openOrCreateChat(userId)} />}
+                        {activeTab === 'voice' && <VoiceChannelsTab className="h-full" onOpenChat={openOrCreateChat} />}
                     </div>
                     {activeTab !== 'voice' && <NewChatFAB onChatCreated={handleChatCreated} />}
                 </div>

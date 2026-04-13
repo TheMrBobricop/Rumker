@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Check, Lock, BarChart3, Circle, Square } from 'lucide-react';
 import type { PollData } from '@/types';

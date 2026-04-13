@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import type { Application } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
@@ -28,16 +28,59 @@ async function fetchPollData(pollId: string, userId: string) {
     const { data: options } = optionsResult;
     const { data: votes } = votesResult;
 
+    return buildPollResult(poll, options || [], votes || [], userId);
+}
+
+/** Batch-fetch poll data for multiple poll IDs in 3 total queries (instead of 3*N) */
+async function batchFetchPollData(pollIds: string[], userId: string): Promise<Map<string, any>> {
+    const result = new Map<string, any>();
+    if (pollIds.length === 0) return result;
+
+    const [pollsResult, optionsResult, votesResult] = await Promise.all([
+        supabase.from('polls').select('id, question, is_anonymous, is_multiple_choice, is_closed, created_by').in('id', pollIds),
+        supabase.from('poll_options').select('id, poll_id, text, position').in('poll_id', pollIds).order('position'),
+        supabase.from('poll_votes').select('poll_id, option_id, user_id').in('poll_id', pollIds),
+    ]);
+
+    const polls = pollsResult.data || [];
+    const allOptions = optionsResult.data || [];
+    const allVotes = votesResult.data || [];
+
+    // Group options and votes by poll_id
+    const optionsByPoll = new Map<string, any[]>();
+    for (const o of allOptions) {
+        const arr = optionsByPoll.get(o.poll_id) || [];
+        arr.push(o);
+        optionsByPoll.set(o.poll_id, arr);
+    }
+    const votesByPoll = new Map<string, any[]>();
+    for (const v of allVotes) {
+        const arr = votesByPoll.get(v.poll_id) || [];
+        arr.push(v);
+        votesByPoll.set(v.poll_id, arr);
+    }
+
+    for (const poll of polls) {
+        const options = optionsByPoll.get(poll.id) || [];
+        const votes = votesByPoll.get(poll.id) || [];
+        result.set(poll.id, buildPollResult(poll, options, votes, userId));
+    }
+
+    return result;
+}
+
+/** Shared helper: build poll result from raw data */
+function buildPollResult(poll: any, options: any[], votes: any[], userId: string) {
     const votesByOption = new Map<string, string[]>();
     let totalVotes = 0;
-    for (const v of votes || []) {
+    for (const v of votes) {
         const arr = votesByOption.get(v.option_id) || [];
         arr.push(v.user_id);
         votesByOption.set(v.option_id, arr);
         totalVotes++;
     }
 
-    const votedOptionIds = (votes || [])
+    const votedOptionIds = votes
         .filter(v => v.user_id === userId)
         .map(v => v.option_id);
 
@@ -50,7 +93,7 @@ async function fetchPollData(pollId: string, userId: string) {
         createdBy: poll.created_by,
         totalVotes,
         votedOptionIds,
-        options: (options || []).map((o: { id: string; text: string }) => ({
+        options: options.map((o: { id: string; text: string }) => ({
             id: o.id,
             text: o.text,
             voterCount: (votesByOption.get(o.id) || []).length,
@@ -64,7 +107,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res) => {
     try {
         const userId = req.user?.userId;
 
-        // Получаем ID чатов, в которых участвует пользователь
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ ID пїЅпїЅпїЅпїЅпїЅ, пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         const { data: participantRows, error: participantError } = await supabase
             .from('chat_participants')
             .select('chat_id')
@@ -81,7 +124,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res) => {
             return res.json([]);
         }
 
-        // Получаем чаты с участниками (try full query, fall back to simpler if columns missing)
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (try full query, fall back to simpler if columns missing)
         let chats: any[] | null = null;
 
         const fullSelect = `
@@ -123,29 +166,48 @@ router.get('/', authenticateToken, async (req: AuthRequest, res) => {
         }
         chats = data;
 
-        // Fetch last message per chat (batch query instead of N+1)
+        // Fetch last message per chat using RPC (DISTINCT ON — exactly 1 row per chat)
         const lastMessageMap = new Map<string, any>();
         try {
-            // Fetch recent messages for all chats in one query, then pick the latest per chat
-            // Limit to chatIds.length * 2 to avoid fetching millions of rows
-            const { data: allLastMsgs } = await supabase
-                .from('messages')
-                .select(`
-                    id, chat_id, content, type, file_url, created_at, sender_id, is_deleted,
-                    users!messages_sender_id_fkey(id, username, first_name, last_name, avatar)
-                `)
-                .in('chat_id', chatIds)
-                .eq('is_deleted', false)
-                .order('created_at', { ascending: false })
-                .limit(chatIds.length * 3);
+            const { data: rpcMsgs, error: rpcErr } = await supabase.rpc('get_last_messages', { p_chat_ids: chatIds });
 
-            // Group by chat_id, take first (newest) per chat
-            if (allLastMsgs) {
-                const seen = new Set<string>();
-                for (const msg of allLastMsgs) {
-                    if (!seen.has(msg.chat_id)) {
-                        seen.add(msg.chat_id);
-                        lastMessageMap.set(msg.chat_id, msg);
+            if (!rpcErr && rpcMsgs) {
+                for (const msg of rpcMsgs) {
+                    lastMessageMap.set(msg.chat_id, {
+                        id: msg.id,
+                        chat_id: msg.chat_id,
+                        sender_id: msg.sender_id,
+                        type: msg.type,
+                        content: msg.content,
+                        file_url: msg.media_url,
+                        created_at: msg.created_at,
+                        users: msg.sender_username ? {
+                            id: msg.sender_id,
+                            username: msg.sender_username,
+                            first_name: msg.sender_first_name,
+                        } : null,
+                    });
+                }
+            } else {
+                // Fallback: old heuristic if RPC not available
+                const { data: allLastMsgs } = await supabase
+                    .from('messages')
+                    .select(`
+                        id, chat_id, content, type, file_url, created_at, sender_id, is_deleted,
+                        users!messages_sender_id_fkey(id, username, first_name, last_name, avatar)
+                    `)
+                    .in('chat_id', chatIds)
+                    .eq('is_deleted', false)
+                    .order('created_at', { ascending: false })
+                    .limit(chatIds.length * 3);
+
+                if (allLastMsgs) {
+                    const seen = new Set<string>();
+                    for (const msg of allLastMsgs) {
+                        if (!seen.has(msg.chat_id)) {
+                            seen.add(msg.chat_id);
+                            lastMessageMap.set(msg.chat_id, msg);
+                        }
                     }
                 }
             }
@@ -182,10 +244,10 @@ router.get('/', authenticateToken, async (req: AuthRequest, res) => {
                 }
             }
         } catch {
-            // message_reads table may not exist yet — skip unread counts
+            // message_reads table may not exist yet пїЅ skip unread counts
         }
 
-        // Форматируем данные под фронтенд Chat type
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ Chat type
         const formattedChatsRaw = await Promise.all((chats || []).map(async (chat: any) => {
             try {
             const participants = (chat.chat_participants || []).map((p: any) => {
@@ -210,7 +272,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res) => {
                 };
             });
 
-            // Для private чатов берем имя собеседника как title
+            // пїЅпїЅпїЅ private пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ title
             const otherParticipants = participants.filter((p: { userId: string }) => p.userId !== userId);
             let title = chat.name;
             if (!title && chat.type === 'private' && otherParticipants.length > 0 && otherParticipants[0].user) {
@@ -242,7 +304,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res) => {
                 };
             }
 
-            // Calculate unread count (graceful — defaults to 0 on any error)
+            // Calculate unread count (graceful пїЅ defaults to 0 on any error)
             let unreadCount = 0;
             try {
                 const readTimestamp = readTimestampMap.get(chat.id);
@@ -298,7 +360,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res) => {
                 return {
                     id: chat.id,
                     type: chat.type || 'private',
-                    title: chat.name || 'Чат',
+                    title: chat.name || 'пїЅпїЅпїЅ',
                     description: null,
                     avatar: null,
                     createdAt: chat.created_at,
@@ -472,7 +534,7 @@ router.post('/', authenticateToken, validateBody(createChatSchema), async (req: 
 
         const chatTitle = title || name || null;
 
-        // Создаем чат
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ
         const insertData: Record<string, any> = {
             name: (type === 'group' || type === 'channel') ? chatTitle : null,
             type,
@@ -492,7 +554,7 @@ router.post('/', authenticateToken, validateBody(createChatSchema), async (req: 
             return res.status(500).json({ error: chatError?.message || 'Failed to create chat', details: chatError?.code });
         }
 
-        // Добавляем создателя + участников
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ + пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         const participants = [
             { chat_id: chat.id, user_id: userId, role: 'owner' },
             ...(participantIds || []).map((id: string) => ({ chat_id: chat.id, user_id: id }))
@@ -504,7 +566,7 @@ router.post('/', authenticateToken, validateBody(createChatSchema), async (req: 
 
         if (participantsError) {
             console.error('Add participants error:', participantsError);
-            // Удаляем чат если не удалось добавить участников
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
             await supabase.from('chats').delete().eq('id', chat.id);
             return res.status(500).json({ error: 'Failed to add participants' });
         }
@@ -515,7 +577,7 @@ router.post('/', authenticateToken, validateBody(createChatSchema), async (req: 
             joinUserToRoom(pid, chat.id);
         }
 
-        // Получаем данные участников для ответа
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
         const { data: participantData } = await supabase
             .from('chat_participants')
             .select(`
@@ -552,7 +614,7 @@ router.post('/', authenticateToken, validateBody(createChatSchema), async (req: 
             }
         }));
 
-        // Для private чатов берем имя собеседника
+        // пїЅпїЅпїЅ private пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         const otherParticipants = formattedParticipants.filter((p: any) => p.userId !== userId);
         let displayTitle = chatTitle;
         if (!displayTitle && type === 'private' && otherParticipants.length > 0) {
@@ -560,7 +622,7 @@ router.post('/', authenticateToken, validateBody(createChatSchema), async (req: 
             displayTitle = `${other.firstName || other.username} ${other.lastName || ''}`.trim();
         }
 
-        // Возвращаем Chat объект напрямую (без обертки)
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ Chat пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
         res.status(201).json({
             id: chat.id,
             type: chat.type,
@@ -588,7 +650,7 @@ router.get('/:chatId/messages', authenticateToken, async (req: AuthRequest, res)
         const offset = parseInt(req.query.offset as string) || 0;
         const userId = req.user?.userId;
 
-        // Проверяем что пользователь участник чата
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
         const { data: participant, error: participantError } = await supabase
             .from('chat_participants')
             .select('user_id')
@@ -600,7 +662,7 @@ router.get('/:chatId/messages', authenticateToken, async (req: AuthRequest, res)
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        // Получаем сообщения
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         const { data: messages, error: messagesError } = await supabase
             .from('messages')
             .select(`
@@ -704,7 +766,7 @@ router.get('/:chatId/messages', authenticateToken, async (req: AuthRequest, res)
             .eq('chat_id', chatId)
             .neq('user_id', userId);
 
-        // Build a set of read message timestamps — a message is "read" if any other user's
+        // Build a set of read message timestamps пїЅ a message is "read" if any other user's
         // last_read_message has a timestamp >= this message's timestamp
         const readReceiptTimestamps: number[] = [];
         if (readReceipts && readReceipts.length > 0) {
@@ -730,8 +792,23 @@ router.get('/:chatId/messages', authenticateToken, async (req: AuthRequest, res)
         }
         const latestReadTs = readReceiptTimestamps.length > 0 ? Math.max(...readReceiptTimestamps) : 0;
 
-        // Форматируем под фронтенд Message type
-        const formattedMessages = await Promise.all((messages || []).map(async (msg: any) => {
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ Message type
+        // Batch-fetch all poll data upfront (3 queries total instead of 3*N)
+        const pollIds: string[] = [];
+        for (const msg of messages || []) {
+            const meta = msg.metadata as Record<string, any> | null;
+            if (msg.type === 'poll' && meta?.pollId) {
+                pollIds.push(meta.pollId);
+            }
+        }
+        let pollDataMap = new Map<string, any>();
+        if (pollIds.length > 0) {
+            try {
+                pollDataMap = await batchFetchPollData(pollIds, userId!);
+            } catch { /* skip poll batch errors */ }
+        }
+
+        const formattedMessages = (messages || []).map((msg: any) => {
             let replyToMessage = undefined;
             if (msg.reply_to_id) {
                 const replyMsg = messageMap.get(msg.reply_to_id);
@@ -799,14 +876,12 @@ router.get('/:chatId/messages', authenticateToken, async (req: AuthRequest, res)
                     };
                 }
                 if (msg.type === 'poll' && meta.pollId) {
-                    try {
-                        const pollData = await fetchPollData(meta.pollId, userId!);
-                        if (pollData) formatted.pollData = pollData;
-                    } catch { /* skip poll fetch errors */ }
+                    const pollData = pollDataMap.get(meta.pollId);
+                    if (pollData) formatted.pollData = pollData;
                 }
             }
             return formatted;
-        }));
+        });
 
         res.json(formattedMessages);
     } catch (error) {
@@ -826,7 +901,7 @@ router.post('/:chatId/messages', authenticateToken, messageSendLimiter, validate
             return res.status(400).json({ error: 'Content or file is required' });
         }
 
-        // Проверяем что пользователь участник чата
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
         const { data: participant, error: participantError } = await supabase
             .from('chat_participants')
             .select('user_id')
@@ -838,7 +913,7 @@ router.post('/:chatId/messages', authenticateToken, messageSendLimiter, validate
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        // Создаем сообщение
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         const now = new Date().toISOString();
         const insertData: Record<string, unknown> = {
             chat_id: chatId,
@@ -938,7 +1013,7 @@ router.post('/:chatId/messages', authenticateToken, messageSendLimiter, validate
             }
         }
 
-        // Форматируем под фронтенд Message type
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ Message type
         const formattedMessage: Record<string, unknown> = {
             id: message.id,
             chatId: message.chat_id,
@@ -1155,18 +1230,14 @@ router.post('/:chatId/messages/:messageId/pin', authenticateToken, async (req: A
         const { chatId, messageId } = req.params;
         const userId = req.user?.userId;
 
-        // Verify participant + pin permission
-        const actorInfo = await getParticipantInfo(chatId, userId!);
+        // Verify participant + pin permission (parallel fetch)
+        const [actorInfo, { data: chat }] = await Promise.all([
+            getParticipantInfo(chatId, userId!),
+            supabase.from('chats').select('type').eq('id', chatId).single(),
+        ]);
         if (!actorInfo) {
             return res.status(403).json({ error: 'Access denied' });
         }
-
-        // In private chats, both users can pin; in groups, need can_pin_messages
-        const { data: chat } = await supabase
-            .from('chats')
-            .select('type')
-            .eq('id', chatId)
-            .single();
 
         if (chat?.type !== 'private' && !hasRight(actorInfo, 'can_pin_messages')) {
             return res.status(403).json({ error: 'No permission to pin messages' });
@@ -1360,7 +1431,7 @@ router.get('/:chatId/pinned', authenticateToken, async (req: AuthRequest, res) =
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        // Pin columns may not exist yet in DB — gracefully return empty
+        // Pin columns may not exist yet in DB пїЅ gracefully return empty
         try {
             const { data: messages, error } = await supabase
                 .from('messages')
@@ -1375,7 +1446,7 @@ router.get('/:chatId/pinned', authenticateToken, async (req: AuthRequest, res) =
 
             if (error) {
                 // If columns don't exist, return empty array
-                console.warn('Get pinned messages — columns may not exist:', error.message);
+                console.warn('Get pinned messages пїЅ columns may not exist:', error.message);
                 return res.json([]);
             }
 
@@ -1435,15 +1506,26 @@ router.get('/:chatId/messages/search', authenticateToken, async (req: AuthReques
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        const { data: messages, error } = await supabase
+        const queryStr = String(query).trim();
+        let messageQuery = supabase
             .from('messages')
             .select(`
                 id, chat_id, content, type, file_url, created_at, updated_at, sender_id,
                 users!messages_sender_id_fkey(id, username, first_name, last_name, avatar)
             `)
             .eq('chat_id', chatId)
-            .eq('is_deleted', false)
-            .ilike('content', `%${String(query).replace(/[%_\\]/g, '\\$&')}%`)
+            .eq('is_deleted', false);
+
+        // Use full-text search for longer queries, fallback to ilike for short ones
+        if (queryStr.length >= 3) {
+            // Convert to tsquery: split words, join with &
+            const tsQuery = queryStr.split(/\s+/).filter(Boolean).join(' & ');
+            messageQuery = messageQuery.textSearch('search_vector', tsQuery, { type: 'plain', config: 'russian' });
+        } else {
+            messageQuery = messageQuery.ilike('content', `%${queryStr.replace(/[%_\\]/g, '\\$&')}%`);
+        }
+
+        const { data: messages, error } = await messageQuery
             .order('created_at', { ascending: false })
             .limit(50);
 
@@ -1478,11 +1560,94 @@ router.get('/:chatId/messages/search', authenticateToken, async (req: AuthReques
     }
 });
 
+// Get messages around a specific message (for search jump-to-message)
+router.get('/:chatId/messages/:messageId/around', authenticateToken, async (req: AuthRequest, res) => {
+    try {
+        const { chatId, messageId } = req.params;
+        const userId = req.user?.userId;
+        const count = Math.min(Number(req.query.count) || 25, 50);
+
+        // Verify participant
+        const { data: participant } = await supabase
+            .from('chat_participants')
+            .select('user_id')
+            .eq('chat_id', chatId)
+            .eq('user_id', userId)
+            .single();
+
+        if (!participant) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        // Try RPC first, fallback to manual query
+        const { data: rpcMessages, error: rpcError } = await supabase.rpc('get_messages_around', {
+            p_chat_id: chatId,
+            p_message_id: messageId,
+            p_count: count,
+        });
+
+        if (rpcError) {
+            // Fallback: fetch target message timestamp, then query around it
+            const { data: targetMsg } = await supabase
+                .from('messages')
+                .select('created_at')
+                .eq('id', messageId)
+                .eq('chat_id', chatId)
+                .single();
+
+            if (!targetMsg) {
+                return res.status(404).json({ error: 'Message not found' });
+            }
+
+            const [beforeResult, afterResult] = await Promise.all([
+                supabase.from('messages')
+                    .select(`id, chat_id, sender_id, type, content, file_url, created_at, updated_at, metadata, reply_to_id, forwarded_from_name, forwarded_from_id, is_pinned,
+                        users!messages_sender_id_fkey(id, username, first_name, last_name, avatar)`)
+                    .eq('chat_id', chatId).eq('is_deleted', false)
+                    .lte('created_at', targetMsg.created_at)
+                    .order('created_at', { ascending: false }).limit(count),
+                supabase.from('messages')
+                    .select(`id, chat_id, sender_id, type, content, file_url, created_at, updated_at, metadata, reply_to_id, forwarded_from_name, forwarded_from_id, is_pinned,
+                        users!messages_sender_id_fkey(id, username, first_name, last_name, avatar)`)
+                    .eq('chat_id', chatId).eq('is_deleted', false)
+                    .gt('created_at', targetMsg.created_at)
+                    .order('created_at', { ascending: true }).limit(count),
+            ]);
+
+            const combined = [...(beforeResult.data || []).reverse(), ...(afterResult.data || [])];
+            const formatted = combined.map((msg: any) => ({
+                id: msg.id, chatId: msg.chat_id, senderId: msg.sender_id,
+                type: msg.type, content: msg.content, mediaUrl: msg.file_url,
+                replyTo: msg.reply_to_id, timestamp: msg.created_at,
+                status: 'sent', isEdited: msg.updated_at !== msg.created_at,
+                isPinned: msg.is_pinned || false, metadata: msg.metadata || undefined,
+                sender: msg.users ? { id: msg.users.id, username: msg.users.username, firstName: msg.users.first_name, lastName: msg.users.last_name, avatar: msg.users.avatar } : null,
+            }));
+            return res.json(formatted);
+        }
+
+        // RPC succeeded: format messages
+        const formatted = (rpcMessages || []).map((msg: any) => ({
+            id: msg.id, chatId: msg.chat_id, senderId: msg.sender_id,
+            type: msg.type, content: msg.content, mediaUrl: msg.media_url,
+            replyTo: msg.reply_to_id, timestamp: msg.created_at,
+            status: 'sent', isEdited: msg.updated_at !== msg.created_at,
+            isPinned: msg.is_pinned || false, metadata: msg.metadata || undefined,
+        }));
+        res.json(formatted);
+    } catch (error) {
+        console.error('Get messages around error:', error);
+        res.status(500).json({ error: 'Failed to get messages' });
+    }
+});
+
 // Get shared media/files/links for a chat
 router.get('/:chatId/media', authenticateToken, async (req: AuthRequest, res) => {
     try {
         const { chatId } = req.params;
         const mediaType = req.query.type as string || 'image'; // image, video, file, voice
+        const limit = Math.min(Number(req.query.limit) || 50, 100);
+        const before = req.query.before as string | undefined; // cursor: created_at ISO string
         const userId = req.user?.userId;
 
         // Verify participant
@@ -1497,7 +1662,7 @@ router.get('/:chatId/media', authenticateToken, async (req: AuthRequest, res) =>
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        // Build filter based on type
+        // Build filter based on type with cursor pagination
         let query = supabase
             .from('messages')
             .select(`
@@ -1508,7 +1673,11 @@ router.get('/:chatId/media', authenticateToken, async (req: AuthRequest, res) =>
             .eq('is_deleted', false)
             .not('file_url', 'is', null)
             .order('created_at', { ascending: false })
-            .limit(100);
+            .limit(limit);
+
+        if (before) {
+            query = query.lt('created_at', before);
+        }
 
         if (mediaType === 'image') {
             query = query.eq('type', 'image');
@@ -1617,11 +1786,13 @@ router.get('/:chatId/read-receipts', authenticateToken, async (req: AuthRequest,
     const userId = req.user?.userId;
 
     try {
+        const limit = Math.min(Number(req.query.limit) || 50, 100);
         const { data: reads, error } = await supabase
             .from('message_reads')
             .select('user_id, last_read_message_id, read_at')
             .eq('chat_id', chatId)
-            .neq('user_id', userId);
+            .neq('user_id', userId)
+            .limit(limit);
 
         if (error) {
             console.warn('Read receipts fetch error:', error.message);
@@ -1672,7 +1843,7 @@ router.post('/:chatId/read', authenticateToken, validateBody(markReadSchema), as
         return res.status(400).json({ error: 'messageId is required' });
     }
 
-    // Best-effort upsert — never return 500 for read-tracking
+    // Best-effort upsert пїЅ never return 500 for read-tracking
     try {
         const { error } = await supabase
             .from('message_reads')
@@ -1718,7 +1889,7 @@ router.post('/:chatId/pin', authenticateToken, async (req: AuthRequest, res) => 
             .eq('user_id', userId);
 
         if (error) {
-            console.warn('Pin chat — column may not exist:', error.message);
+            console.warn('Pin chat пїЅ column may not exist:', error.message);
         }
 
         res.json({ success: true });
@@ -1740,7 +1911,7 @@ router.delete('/:chatId/pin', authenticateToken, async (req: AuthRequest, res) =
             .eq('user_id', userId);
 
         if (error) {
-            console.warn('Unpin chat — column may not exist:', error.message);
+            console.warn('Unpin chat пїЅ column may not exist:', error.message);
         }
 
         res.json({ success: true });
@@ -1763,7 +1934,7 @@ router.post('/:chatId/mute', authenticateToken, async (req: AuthRequest, res) =>
             .eq('user_id', userId);
 
         if (error) {
-            console.warn('Mute chat — column may not exist:', error.message);
+            console.warn('Mute chat пїЅ column may not exist:', error.message);
         }
 
         res.json({ success: true });
@@ -1785,7 +1956,7 @@ router.delete('/:chatId/mute', authenticateToken, async (req: AuthRequest, res) 
             .eq('user_id', userId);
 
         if (error) {
-            console.warn('Unmute chat — column may not exist:', error.message);
+            console.warn('Unmute chat пїЅ column may not exist:', error.message);
         }
 
         res.json({ success: true });
@@ -1935,33 +2106,22 @@ router.get('/:chatId/participants', authenticateToken, async (req: AuthRequest, 
         const { chatId } = req.params;
         const userId = req.user?.userId;
 
-        // Verify participant
-        const { data: participant } = await supabase
-            .from('chat_participants')
-            .select('user_id')
-            .eq('chat_id', chatId)
-            .eq('user_id', userId)
-            .single();
+        // Verify participant + fetch chat info and participants in parallel
+        const [participantCheck, chatResult, participantsResult] = await Promise.all([
+            supabase.from('chat_participants').select('user_id').eq('chat_id', chatId).eq('user_id', userId).single(),
+            supabase.from('chats').select('id, name, type, description, avatar, created_at, created_by').eq('id', chatId).single(),
+            supabase.from('chat_participants').select(`
+                user_id, joined_at,
+                users!chat_participants_user_id_fkey(id, username, first_name, last_name, avatar, is_online, last_seen)
+            `).eq('chat_id', chatId),
+        ]);
 
-        if (!participant) {
+        if (!participantCheck.data) {
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        // Get chat info
-        const { data: chat } = await supabase
-            .from('chats')
-            .select('id, name, type, description, avatar, created_at, created_by')
-            .eq('id', chatId)
-            .single();
-
-        // Get all participants with user data
-        const { data: participants, error } = await supabase
-            .from('chat_participants')
-            .select(`
-                user_id, joined_at,
-                users!chat_participants_user_id_fkey(id, username, first_name, last_name, avatar, is_online, last_seen)
-            `)
-            .eq('chat_id', chatId);
+        const chat = chatResult.data;
+        const { data: participants, error } = participantsResult;
 
         if (error) {
             console.error('Get participants error:', error);
@@ -2083,23 +2243,26 @@ router.put('/:chatId/members/:userId/role', authenticateToken, validateBody(upda
         const { role, title, adminRights } = req.body;
         const actorId = req.user?.userId;
 
-        const actor = await getParticipantInfo(chatId, actorId!);
-        if (!actor) return res.status(403).json({ error: 'Нет доступа' });
-        if (actor.is_banned) return res.status(403).json({ error: 'Вы заблокированы' });
         if (actorId === targetUserId) return res.status(400).json({ error: 'Нельзя изменить свою роль' });
 
-        const target = await getParticipantInfo(chatId, targetUserId);
-        if (!target) return res.status(404).json({ error: 'Пользователь не найден в чате' });
+        // Fetch actor and target info in parallel
+        const [actor, target] = await Promise.all([
+            getParticipantInfo(chatId, actorId!),
+            getParticipantInfo(chatId, targetUserId),
+        ]);
+        if (!actor) return res.status(403).json({ error: 'Нет доступа' });
+        if (actor.is_banned) return res.status(403).json({ error: 'Вы заблокированы' });
+        if (!target) return res.status(404).json({ error: 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅ' });
 
         if (!canPromote(actor, target)) {
-            return res.status(403).json({ error: 'Недостаточно прав' });
+            return res.status(403).json({ error: 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ' });
         }
 
         // Admins cannot grant rights they don't have
         if (actor.role === 'admin' && adminRights && actor.admin_rights) {
             for (const [key, value] of Object.entries(adminRights)) {
                 if (value === true && !(actor.admin_rights as any)[key]) {
-                    return res.status(403).json({ error: `Нельзя дать право '${key}', которого у вас нет` });
+                    return res.status(403).json({ error: `пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ '${key}', пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅ пїЅпїЅпїЅ` });
                 }
             }
         }
@@ -2121,7 +2284,7 @@ router.put('/:chatId/members/:userId/role', authenticateToken, validateBody(upda
 
         if (error) {
             console.error('Update role error:', error);
-            return res.status(500).json({ error: 'Не удалось обновить роль' });
+            return res.status(500).json({ error: 'пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ' });
         }
 
         try {
@@ -2141,7 +2304,7 @@ router.put('/:chatId/members/:userId/role', authenticateToken, validateBody(upda
         res.json({ success: true });
     } catch (error) {
         console.error('Update role error:', error);
-        res.status(500).json({ error: 'Не удалось обновить роль' });
+        res.status(500).json({ error: 'пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ' });
     }
 });
 
@@ -2153,10 +2316,10 @@ router.put('/:chatId/members/:userId/title', authenticateToken, validateBody(upd
         const actorId = req.user?.userId;
 
         const actor = await getParticipantInfo(chatId, actorId!);
-        if (!actor) return res.status(403).json({ error: 'Нет доступа' });
+        if (!actor) return res.status(403).json({ error: 'пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ' });
 
         if (!hasRight(actor, 'can_promote_members')) {
-            return res.status(403).json({ error: 'Недостаточно прав' });
+            return res.status(403).json({ error: 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ' });
         }
 
         const { error } = await supabase
@@ -2166,7 +2329,7 @@ router.put('/:chatId/members/:userId/title', authenticateToken, validateBody(upd
             .eq('user_id', targetUserId);
 
         if (error) {
-            return res.status(500).json({ error: 'Не удалось обновить титул' });
+            return res.status(500).json({ error: 'пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ' });
         }
 
         try {
@@ -2181,7 +2344,7 @@ router.put('/:chatId/members/:userId/title', authenticateToken, validateBody(upd
         res.json({ success: true });
     } catch (error) {
         console.error('Update title error:', error);
-        res.status(500).json({ error: 'Не удалось обновить титул' });
+        res.status(500).json({ error: 'пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ' });
     }
 });
 
@@ -2193,21 +2356,21 @@ router.delete('/:chatId/members/:userId', authenticateToken, async (req: AuthReq
         const actorId = req.user?.userId;
 
         if (actorId === targetUserId) {
-            return res.status(400).json({ error: 'Нельзя удалить самого себя' });
+            return res.status(400).json({ error: 'пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ' });
         }
 
         const actor = await getParticipantInfo(chatId, actorId!);
-        if (!actor) return res.status(403).json({ error: 'Нет доступа' });
+        if (!actor) return res.status(403).json({ error: 'пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ' });
 
         if (!hasRight(actor, 'can_ban_users')) {
-            return res.status(403).json({ error: 'Недостаточно прав' });
+            return res.status(403).json({ error: 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ' });
         }
 
         const target = await getParticipantInfo(chatId, targetUserId);
-        if (!target) return res.status(404).json({ error: 'Пользователь не найден' });
+        if (!target) return res.status(404).json({ error: 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ' });
 
         if (!outranks(actor, target)) {
-            return res.status(403).json({ error: 'Нельзя удалить пользователя с равной или более высокой ролью' });
+            return res.status(403).json({ error: 'пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ' });
         }
 
         if (ban) {
@@ -2243,7 +2406,7 @@ router.delete('/:chatId/members/:userId', authenticateToken, async (req: AuthReq
         res.json({ success: true });
     } catch (error) {
         console.error('Remove member error:', error);
-        res.status(500).json({ error: 'Не удалось удалить участника' });
+        res.status(500).json({ error: 'пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ' });
     }
 });
 
@@ -2257,9 +2420,9 @@ router.patch('/:chatId', authenticateToken, validateBody(updateChatSchema), asyn
 
         // Permission check: owner or admin with can_change_info
         const actorInfo = await getParticipantInfo(chatId, userId!);
-        if (!actorInfo) return res.status(403).json({ error: 'Нет доступа к этому чату' });
+        if (!actorInfo) return res.status(403).json({ error: 'пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ' });
         if (!hasRight(actorInfo, 'can_change_info')) {
-            return res.status(403).json({ error: 'Нет прав на изменение информации о чате' });
+            return res.status(403).json({ error: 'пїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅ' });
         }
 
         // Build update object
@@ -2276,7 +2439,7 @@ router.patch('/:chatId', authenticateToken, validateBody(updateChatSchema), asyn
             .single();
 
         if (error || !updated) {
-            return res.status(500).json({ error: 'Не удалось обновить информацию о чате' });
+            return res.status(500).json({ error: 'пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅ' });
         }
 
         // Broadcast to all participants
@@ -2301,8 +2464,10 @@ router.patch('/:chatId', authenticateToken, validateBody(updateChatSchema), asyn
         });
     } catch (error) {
         console.error('Update chat error:', error);
-        res.status(500).json({ error: 'Не удалось обновить информацию о чате' });
+        res.status(500).json({ error: 'пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅ' });
     }
 });
 
 export default router;
+
+

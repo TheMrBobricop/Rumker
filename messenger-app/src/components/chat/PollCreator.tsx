@@ -1,6 +1,7 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAnimatedMount, ANIM_MODAL, ANIM_BACKDROP } from '@/lib/hooks/useAnimatedMount';
 
 interface PollCreatorProps {
     open: boolean;
@@ -18,8 +19,10 @@ export function PollCreator({ open, onClose, onCreatePoll }: PollCreatorProps) {
     const [options, setOptions] = useState(['', '']);
     const [isAnonymous, setIsAnonymous] = useState(false);
     const [isMultipleChoice, setIsMultipleChoice] = useState(false);
+    const { mounted: backdropMounted, className: backdropClass } = useAnimatedMount(open, ANIM_BACKDROP);
+    const { mounted: modalMounted, className: modalClass } = useAnimatedMount(open, ANIM_MODAL);
 
-    if (!open) return null;
+    if (!backdropMounted && !modalMounted) return null;
 
     const handleAddOption = () => {
         if (options.length < 10) {
@@ -59,9 +62,9 @@ export function PollCreator({ open, onClose, onCreatePoll }: PollCreatorProps) {
     const isValid = question.trim() && options.filter(o => o.trim()).length >= 2;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-backdrop-in" onClick={onClose}>
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 ${backdropClass}`} onClick={onClose}>
             <div
-                className="bg-card rounded-xl mx-4 max-w-md w-full shadow-xl animate-fade-scale-in overflow-hidden"
+                className={`bg-card rounded-xl mx-4 max-w-md w-full shadow-xl ${modalClass} overflow-hidden`}
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}

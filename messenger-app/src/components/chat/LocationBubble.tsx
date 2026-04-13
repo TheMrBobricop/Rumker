@@ -1,4 +1,4 @@
-import { MapPin, ExternalLink } from 'lucide-react';
+﻿import { MapPin, ExternalLink } from 'lucide-react';
 import type { LocationData } from '@/types';
 
 interface LocationBubbleProps {

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import multer from 'multer';
@@ -34,7 +34,7 @@ const upload = multer({
     },
 });
 
-// GET /soundboard?chatId=xxx — list sounds for a chat
+// GET /soundboard?chatId=xxx пїЅ list sounds for a chat
 router.get('/', authenticateToken, async (req: AuthRequest, res) => {
     try {
         const chatId = req.query.chatId as string;
@@ -67,7 +67,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res) => {
     }
 });
 
-// POST /soundboard — upload a custom sound
+// POST /soundboard пїЅ upload a custom sound
 router.post('/', authenticateToken, upload.single('file'), async (req: AuthRequest, res) => {
     try {
         const userId = req.user?.userId;
@@ -117,7 +117,7 @@ router.post('/', authenticateToken, upload.single('file'), async (req: AuthReque
     }
 });
 
-// DELETE /soundboard/:soundId — delete a custom sound
+// DELETE /soundboard/:soundId пїЅ delete a custom sound
 router.delete('/:soundId', authenticateToken, async (req: AuthRequest, res) => {
     try {
         const userId = req.user?.userId;
@@ -153,7 +153,7 @@ router.delete('/:soundId', authenticateToken, async (req: AuthRequest, res) => {
     }
 });
 
-// POST /soundboard/:soundId/favorite — toggle favorite
+// POST /soundboard/:soundId/favorite пїЅ toggle favorite
 router.post('/:soundId/favorite', authenticateToken, async (req: AuthRequest, res) => {
     try {
         const userId = req.user?.userId;
@@ -187,3 +187,5 @@ router.post('/:soundId/favorite', authenticateToken, async (req: AuthRequest, re
 });
 
 export default router;
+
+

@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ChatListContextMenu } from './ChatListContextMenu';
 import { toast } from 'sonner';
 import type { Chat } from '@/types';
+import { useAnimatedMount, ANIM_MODAL, ANIM_BACKDROP } from '@/lib/hooks/useAnimatedMount';
 
 interface ChatListProps {
     className?: string;
@@ -22,6 +23,7 @@ export function ChatList({ className }: ChatListProps) {
     const typingUsers = useChatStore((s) => s.typingUsers);
     const loadChats = useChatStore((s) => s.loadChats);
     const isLoading = useChatStore((s) => s.isLoading);
+    const hasLoadedOnce = useChatStore((s) => s.hasLoadedOnce);
     const togglePinChat = useChatStore((s) => s.togglePinChat);
     const toggleMuteChat = useChatStore((s) => s.toggleMuteChat);
     const clearChatMessages = useChatStore((s) => s.clearChatMessages);
@@ -38,6 +40,12 @@ export function ChatList({ className }: ChatListProps) {
     const [deleteConfirm, setDeleteConfirm] = useState<Chat | null>(null);
     // Clear confirmation
     const [clearConfirm, setClearConfirm] = useState<Chat | null>(null);
+
+    // Animated dialogs
+    const { mounted: delBackdropMounted, className: delBackdropClass } = useAnimatedMount(!!deleteConfirm, ANIM_BACKDROP);
+    const { mounted: delModalMounted, className: delModalClass } = useAnimatedMount(!!deleteConfirm, ANIM_MODAL);
+    const { mounted: clrBackdropMounted, className: clrBackdropClass } = useAnimatedMount(!!clearConfirm, ANIM_BACKDROP);
+    const { mounted: clrModalMounted, className: clrModalClass } = useAnimatedMount(!!clearConfirm, ANIM_MODAL);
 
     useEffect(() => {
         loadChats();
@@ -141,7 +149,7 @@ export function ChatList({ className }: ChatListProps) {
     return (
         <div className={cn('relative h-full', className)}>
             <div className="h-full overflow-y-auto scrollbar-thin px-2 py-1">
-                {isLoading && (
+                {isLoading && !hasLoadedOnce && (
                     <div className="p-3 space-y-3">
                         {[...Array(5)].map((_, i) => (
                             <div key={i} className="flex items-center gap-3 px-3">
@@ -298,7 +306,7 @@ export function ChatList({ className }: ChatListProps) {
                                         {chat.unreadCount > 0 && (
                                             <div
                                                 className={cn(
-                                                    'flex h-[22px] min-w-[22px] items-center justify-center rounded-full px-1.5 text-[11px] font-bold text-white',
+                                                    'flex h-[22px] min-w-[22px] items-center justify-center rounded-full px-1.5 text-[11px] font-bold text-white animate-badge-pop',
                                                     chat.isMuted
                                                         ? 'bg-muted-foreground/50'
                                                         : 'bg-tg-primary',
@@ -331,12 +339,12 @@ export function ChatList({ className }: ChatListProps) {
             )}
 
             {/* Delete Confirmation */}
-            {deleteConfirm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-backdrop-in" onClick={() => setDeleteConfirm(null)}>
-                    <div className="bg-card rounded-xl p-6 mx-4 max-w-sm w-full shadow-xl animate-fade-scale-in" onClick={(e) => e.stopPropagation()}>
+            {(delBackdropMounted || delModalMounted) && (
+                <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 ${delBackdropClass}`} onClick={() => setDeleteConfirm(null)}>
+                    <div className={`bg-card rounded-xl p-6 mx-4 max-w-sm w-full shadow-xl ${delModalClass}`} onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-lg font-semibold text-foreground mb-2">Удалить чат</h3>
                         <p className="text-sm text-muted-foreground mb-4">
-                            Удалить «{deleteConfirm.title || 'Без названия'}»? Это действие нельзя отменить.
+                            Удалить «{deleteConfirm?.title || 'Без названия'}»? Это действие нельзя отменить.
                         </p>
                         <div className="flex gap-2 justify-end">
                             <button
@@ -357,12 +365,12 @@ export function ChatList({ className }: ChatListProps) {
             )}
 
             {/* Clear Confirmation */}
-            {clearConfirm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-backdrop-in" onClick={() => setClearConfirm(null)}>
-                    <div className="bg-card rounded-xl p-6 mx-4 max-w-sm w-full shadow-xl animate-fade-scale-in" onClick={(e) => e.stopPropagation()}>
+            {(clrBackdropMounted || clrModalMounted) && (
+                <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 ${clrBackdropClass}`} onClick={() => setClearConfirm(null)}>
+                    <div className={`bg-card rounded-xl p-6 mx-4 max-w-sm w-full shadow-xl ${clrModalClass}`} onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-lg font-semibold text-foreground mb-2">Очистить чат</h3>
                         <p className="text-sm text-muted-foreground mb-4">
-                            Удалить все сообщения в «{clearConfirm.title || 'Без названия'}»?
+                            Удалить все сообщения в «{clearConfirm?.title || 'Без названия'}»?
                         </p>
                         <div className="flex gap-2 justify-end">
                             <button

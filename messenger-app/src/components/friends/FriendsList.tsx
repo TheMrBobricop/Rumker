@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getFriends, getFriendRequests, acceptFriendRequest, rejectFriendRequest, removeFriend, type Friend, type FriendRequest } from '@/lib/api/friends';

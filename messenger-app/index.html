@@ -1,33 +1,15 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="description" content="Веб-мессенджер в стиле Telegram — безопасный, быстрый и красивый" />
+    <meta name="description" content="Web messenger in Telegram style: secure, fast, and clean." />
     <meta name="theme-color" content="#2AABEE" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>Rumker</title>
-    <script>
-      // Synchronous theme detection — prevents FOUC (flash of unstyled content)
-      (function() {
-        try {
-          var raw = localStorage.getItem('settings-storage');
-          if (raw) {
-            var parsed = JSON.parse(raw);
-            var state = parsed && parsed.state;
-            var appearance = state && state.appearance;
-            if (appearance) {
-              var theme = appearance.theme;
-              var isDark = theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-              if (isDark) document.documentElement.classList.add('dark');
-            }
-          }
-        } catch(e) {}
-      })();
-    </script>
   </head>
   <body>
     <div id="root"></div>

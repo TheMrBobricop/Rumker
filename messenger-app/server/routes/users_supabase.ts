@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { validateBody, updateProfileSchema } from '../lib/validation.js';
@@ -48,7 +48,7 @@ router.get('/search', authenticateToken, async (req: AuthRequest, res) => {
             return res.status(500).json({ error: 'Failed to search users' });
         }
 
-        // Преобразуем snake_case в camelCase для frontend
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ snake_case пїЅ camelCase пїЅпїЅпїЅ frontend
         const formattedUsers = users?.map(user => ({
             id: user.id,
             username: user.username,
@@ -299,3 +299,5 @@ router.put('/me/privacy', authenticateToken, async (req: AuthRequest, res) => {
 });
 
 export default router;
+
+

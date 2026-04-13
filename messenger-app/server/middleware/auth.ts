@@ -1,4 +1,4 @@
-
+﻿
 import { type Request, type Response, type NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
@@ -12,7 +12,7 @@ if (!JWT_SECRET) {
 }
 
 if (!process.env.JWT_REFRESH_SECRET) {
-    console.warn('WARNING: JWT_REFRESH_SECRET not set — falling back to JWT_SECRET. Set a separate secret in production!');
+    console.warn('WARNING: JWT_REFRESH_SECRET not set пїЅ falling back to JWT_SECRET. Set a separate secret in production!');
 }
 
 export interface AuthRequest extends Request {
@@ -68,3 +68,5 @@ export const verifyRefreshToken = (token: string): Promise<any> => {
         });
     });
 };
+
+

@@ -1,4 +1,4 @@
-// ========================================
+﻿// ========================================
 // API Client
 // ========================================
 
@@ -17,6 +17,7 @@ interface RequestOptions {
 class ApiClient {
     private baseUrl: string;
     private refreshPromise: Promise<boolean> | null = null;
+    private inflightGets = new Map<string, Promise<any>>();
 
     constructor(baseUrl: string) {
         this.baseUrl = baseUrl;
@@ -49,8 +50,8 @@ class ApiClient {
             try {
                 const authStore = useAuthStore.getState();
 
-                // Refresh token передаётся только через httpOnly cookie (credentials: 'include')
-                // Не отправляем его в body — это уязвимость (XSS доступ к localStorage)
+                // Refresh token пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ httpOnly cookie (credentials: 'include')
+                // пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅ body пїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (XSS пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ localStorage)
                 const response = await fetch(`${this.baseUrl}/auth/refresh`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -58,7 +59,7 @@ class ApiClient {
                 });
 
                 if (!response.ok) {
-                    // Session is dead — logout once
+                    // Session is dead пїЅ logout once
                     authStore.logout();
                     tokenStorage.setToken(null);
                     return false;
@@ -69,7 +70,7 @@ class ApiClient {
                 tokenStorage.setToken(data.accessToken);
                 return true;
             } catch (err) {
-                // Network error — do NOT logout, user might just be offline temporarily
+                // Network error пїЅ do NOT logout, user might just be offline temporarily
                 console.warn('[ApiClient] Refresh failed (network?):', err);
                 return false;
             } finally {
@@ -86,11 +87,14 @@ class ApiClient {
         const url = `${this.baseUrl}${endpoint}`;
         const headers = this.getHeaders(customHeaders);
 
-        console.log('[ApiClient] Request:', method, url);
+        if (import.meta.env.DEV) {
+            console.log('[ApiClient] Request:', method, url);
+        }
 
         const config: RequestInit = {
             method,
             headers,
+            credentials: 'include',
             signal,
         };
 
@@ -107,12 +111,16 @@ class ApiClient {
                 // Retry with new token
                 const newHeaders = this.getHeaders(customHeaders);
                 const retryConfig: RequestInit = { method, headers: newHeaders, signal };
+                retryConfig.credentials = 'include';
                 if (body && method !== 'GET') {
                     retryConfig.body = JSON.stringify(body);
                 }
                 response = await fetch(url, retryConfig);
+            } else if (this.getToken()) {
+                useAuthStore.getState().logout();
+                tokenStorage.setToken(null);
             }
-            // Don't logout here — let the caller or App-level logic handle session expiry
+            // Don't logout here пїЅ let the caller or App-level logic handle session expiry
         }
 
         if (!response.ok) {
@@ -127,8 +135,33 @@ class ApiClient {
         return response.json();
     }
 
+    /**
+     * GET with request deduplication + retry on 5xx.
+     * Concurrent identical GET requests share a single in-flight promise.
+     */
     async get<T>(endpoint: string, signal?: AbortSignal): Promise<T> {
-        return this.request<T>(endpoint, { method: 'GET', signal });
+        const existing = this.inflightGets.get(endpoint);
+        if (existing) return existing as Promise<T>;
+
+        const promise = this.getWithRetry<T>(endpoint, signal)
+            .finally(() => this.inflightGets.delete(endpoint));
+        this.inflightGets.set(endpoint, promise);
+        return promise;
+    }
+
+    private async getWithRetry<T>(endpoint: string, signal?: AbortSignal, maxRetries = 2): Promise<T> {
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                return await this.request<T>(endpoint, { method: 'GET', signal });
+            } catch (err) {
+                if (err instanceof ApiError && err.status >= 500 && attempt < maxRetries) {
+                    await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+                    continue;
+                }
+                throw err;
+            }
+        }
+        throw new Error('Unreachable');
     }
 
     async post<T>(endpoint: string, body: unknown): Promise<T> {
@@ -170,6 +203,7 @@ class ApiClient {
         let response = await fetch(`${this.baseUrl}${endpoint}`, {
             method: 'POST',
             headers,
+            credentials: 'include',
             body: formData,
         });
 
@@ -183,8 +217,12 @@ class ApiClient {
                 response = await fetch(`${this.baseUrl}${endpoint}`, {
                     method: 'POST',
                     headers: retryHeaders,
+                    credentials: 'include',
                     body: formData,
                 });
+            } else if (this.getToken()) {
+                useAuthStore.getState().logout();
+                tokenStorage.setToken(null);
             }
         }
 
@@ -215,3 +253,5 @@ export class ApiError extends Error {
 
 // Singleton instance
 export const api = new ApiClient(API_BASE_URL);
+
+

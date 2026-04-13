@@ -73,6 +73,17 @@ export function LoginPage() {
     const navigate = useNavigate();
     const login = useAuthStore((state) => state.login);
 
+    const getApiErrorText = (json: unknown, fallback: string) => {
+        if (!json || typeof json !== 'object') return fallback;
+        const error = typeof (json as { error?: unknown }).error === 'string'
+            ? (json as { error: string }).error
+            : '';
+        const details = typeof (json as { details?: unknown }).details === 'string'
+            ? (json as { details: string }).details
+            : '';
+        return [error, details].filter(Boolean).join(': ') || fallback;
+    };
+
     // Load saved accounts on mount
     useEffect(() => {
         const accounts = getSavedAccounts();
@@ -144,11 +155,16 @@ export function LoginPage() {
             const res = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: selectedAccount.email, password: data.password }),
+                credentials: 'include',
+                body: JSON.stringify({
+                    userId: selectedAccount.id,
+                    email: selectedAccount.email.trim().toLowerCase(),
+                    password: data.password,
+                }),
             });
             const json = await res.json();
 
-            if (!res.ok) throw new Error(json.error || 'Auth failed');
+            if (!res.ok) throw new Error(getApiErrorText(json, 'Auth failed'));
 
             toast.success(`Welcome, ${json.user.username}!`);
             login(json.user, json.accessToken);
@@ -164,6 +180,12 @@ export function LoginPage() {
             navigate('/');
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Login failed';
+            if (msg === 'Use Telegram login for this account') {
+                setLoginView('full-form');
+                setActiveTab('telegram');
+                toast.info('Этот аккаунт привязан к Telegram. Войдите через Telegram.');
+                return;
+            }
             toast.error(msg);
         } finally {
             setLoading(false);
@@ -177,10 +199,11 @@ export function LoginPage() {
             const res = await fetch('/api/auth/telegram/send-code', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({ phoneNumber: formattedPhone }),
             });
             const json = await res.json();
-            if (!res.ok) throw new Error(json.error || 'Failed to send code');
+            if (!res.ok) throw new Error(getApiErrorText(json, 'Failed to send code'));
 
             setPhoneHash(json.phoneCodeHash);
             setPhoneNumber(formattedPhone);
@@ -200,6 +223,7 @@ export function LoginPage() {
             const res = await fetch('/api/auth/telegram/sign-in', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({
                     phoneNumber,
                     phoneCodeHash: phoneHash,
@@ -214,7 +238,7 @@ export function LoginPage() {
                 toast.info('Требуется пароль двухфакторной аутентификации');
                 return;
             }
-            if (!res.ok) throw new Error(json.error || 'Login failed');
+            if (!res.ok) throw new Error(getApiErrorText(json, 'Login failed'));
 
             toast.success(`Welcome back, ${json.user.firstName}!`);
             login(json.user, json.accessToken);
@@ -234,10 +258,11 @@ export function LoginPage() {
             const res = await fetch('/api/auth/telegram/check-password', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({ phoneNumber, password: data.password }),
             });
             const json = await res.json();
-            if (!res.ok) throw new Error(json.error || 'Неверный пароль');
+            if (!res.ok) throw new Error(getApiErrorText(json, 'Неверный пароль'));
 
             toast.success(`С возвращением, ${json.user.firstName || json.user.username}!`);
             login(json.user, json.accessToken);
@@ -259,11 +284,15 @@ export function LoginPage() {
             const res = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
+                credentials: 'include',
+                body: JSON.stringify({
+                    ...data,
+                    email: data.email?.trim().toLowerCase(),
+                }),
             });
             const json = await res.json();
 
-            if (!res.ok) throw new Error(json.error || 'Auth failed');
+            if (!res.ok) throw new Error(getApiErrorText(json, 'Auth failed'));
 
             toast.success(`Welcome, ${json.user.username}!`);
             login(json.user, json.accessToken);

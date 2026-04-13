@@ -1,4 +1,4 @@
-import { MessageSquare } from 'lucide-react';
+﻿import { MessageSquare } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { SharedContact } from '@/types';
 import { findOrCreatePrivateChat } from '@/lib/api/chats';

@@ -1,4 +1,4 @@
-// Chat API functions
+﻿// Chat API functions
 import { api } from './client';
 import type { Chat, Message, ReadReceipt } from '@/types';
 
@@ -113,6 +113,11 @@ export async function searchMessages(chatId: string, query: string): Promise<Mes
     return api.get<Message[]>(`/chats/${chatId}/messages/search?q=${encodeURIComponent(query)}`);
 }
 
+// Get messages around a specific message (for search jump-to-message)
+export async function getMessagesAround(chatId: string, messageId: string, count = 25): Promise<Message[]> {
+    return api.get<Message[]>(`/chats/${chatId}/messages/${messageId}/around?count=${count}`);
+}
+
 // Get shared media for a chat
 export async function getChatMedia(chatId: string, type: 'image' | 'video' | 'file' | 'voice' = 'image'): Promise<Message[]> {
     return api.get<Message[]>(`/chats/${chatId}/media?type=${type}`);
@@ -177,7 +182,7 @@ export async function getChatParticipants(chatId: string): Promise<ChatParticipa
     return api.get<ChatParticipantsResponse>(`/chats/${chatId}/participants`);
 }
 
-// Update chat info (name, description, avatar) — requires can_change_info permission
+// Update chat info (name, description, avatar) пїЅ requires can_change_info permission
 export interface UpdateChatData {
     name?: string;
     description?: string | null;
@@ -227,3 +232,5 @@ export async function kickMember(
 ): Promise<{ success: boolean }> {
     return api.delete<{ success: boolean }>(`/chats/${chatId}/members/${userId}${ban ? '?ban=true' : ''}`);
 }
+
+

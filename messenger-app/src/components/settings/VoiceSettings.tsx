@@ -110,7 +110,7 @@ export function VoiceSettings() {
             'ShiftLeft': 'L Shift', 'ShiftRight': 'R Shift', 'AltLeft': 'L Alt', 'AltRight': 'R Alt',
             'CapsLock': 'Caps Lock', 'Tab': 'Tab', 'Backquote': '`',
         };
-        return map[code] || code.replace('Key', '').replace('Digit', '');
+        return map[code] || (code ?? '').replace('Key', '').replace('Digit', '') || 'Space';
     };
 
     return (

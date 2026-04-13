@@ -1,4 +1,4 @@
-import { useSettingsStore } from '@/stores/settingsStore';
+﻿import { useSettingsStore } from '@/stores/settingsStore';
 import { soundEngine } from '@/lib/sounds/soundEngine';
 
 export function requestNotificationPermission(): void {
@@ -56,7 +56,7 @@ export function playCallEndSound(): void {
     soundEngine.play('callEnd');
 }
 
-/** Short busy tone — three descending beeps to indicate user is busy */
+/** Short busy tone пїЅ three descending beeps to indicate user is busy */
 export function playBusySound(): void {
     soundEngine.play('callEnd');
 }
@@ -64,3 +64,5 @@ export function playBusySound(): void {
 export function updateDocumentTitle(unreadCount: number): void {
     document.title = unreadCount > 0 ? `(${unreadCount}) Rumker` : 'Rumker';
 }
+
+

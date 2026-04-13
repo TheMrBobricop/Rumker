@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useCallStore } from '@/stores/callStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -16,6 +16,7 @@ import { CallControlBar } from './CallControlBar';
 import { CallParticipantTile } from './CallParticipantTile';
 import { CallParticipantContextMenu } from './CallParticipantContextMenu';
 import { ConnectionQualityIcon } from './ConnectionQualityIcon';
+import { useAnimatedMount, ANIM_OVERLAY } from '@/lib/hooks/useAnimatedMount';
 
 type DockPosition = 'float' | 'left' | 'right' | 'top' | 'bottom' | 'fullscreen';
 
@@ -258,7 +259,9 @@ export function ActiveCallOverlay() {
         setPos({ x: window.innerWidth - size.w - 16, y: 16 });
     }, [size.w]);
 
-    if (!activeCall) return null;
+    const { mounted } = useAnimatedMount(!!activeCall, ANIM_OVERLAY);
+
+    if (!mounted || !activeCall) return null;
 
     const isRinging = activeCall.status === 'ringing' || activeCall.status === 'connecting';
     const statusText = activeCall.status === 'ringing' ? 'Вызов...'

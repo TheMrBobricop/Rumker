@@ -294,6 +294,17 @@
     transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
+  /* Badge pop animation for unread count */
+  @keyframes badge-pop {
+    0% { transform: scale(0); }
+    60% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+
+  .animate-badge-pop {
+    animation: badge-pop 0.25s ease-out;
+  }
+
   /* Animation for typing indicator */
   @keyframes typing-dot {
 
@@ -817,6 +828,154 @@
 
   .animate-slide-down-pin {
     animation: slide-down-pin 200ms ease-out both;
+  }
+
+  /* Pinned messages panel */
+  @keyframes pin-panel-in {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-pin-panel-in {
+    animation: pin-panel-in 220ms ease-out both;
+  }
+
+  @keyframes pin-header-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-pin-header-in {
+    animation: pin-header-in 180ms ease-out both;
+  }
+
+  .pin-dash {
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(138, 124, 255, 0.95) 0,
+      rgba(138, 124, 255, 0.95) 6px,
+      transparent 6px,
+      transparent 10px
+    );
+  }
+
+  @keyframes pin-item-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-pin-item-in {
+    animation: pin-item-in 180ms ease-out both;
+  }
+
+  /* Pinned bar smooth swap */
+  .pin-swap-layer {
+    will-change: transform, opacity;
+  }
+
+  @keyframes pin-swap-up-current {
+    from { transform: translateY(0); opacity: 1; }
+    to { transform: translateY(-100%); opacity: 0; }
+  }
+  @keyframes pin-swap-up-next {
+    from { transform: translateY(100%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes pin-swap-down-current {
+    from { transform: translateY(0); opacity: 1; }
+    to { transform: translateY(100%); opacity: 0; }
+  }
+  @keyframes pin-swap-down-next {
+    from { transform: translateY(-100%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .animate-pin-swap-up-current { animation: pin-swap-up-current 220ms ease both; }
+  .animate-pin-swap-up-next { animation: pin-swap-up-next 220ms ease both; }
+  .animate-pin-swap-down-current { animation: pin-swap-down-current 220ms ease both; }
+  .animate-pin-swap-down-next { animation: pin-swap-down-next 220ms ease both; }
+
+  /* Telegram-like message send/receive motion */
+  @keyframes msg-send-in {
+    0% {
+      opacity: 0;
+      transform: translate3d(10px, 10px, 0) scale(0.93);
+      filter: blur(1px);
+    }
+    100% {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  @keyframes msg-recv-in {
+    0% {
+      opacity: 0;
+      transform: translate3d(-10px, 8px, 0) scale(0.95);
+      filter: blur(1px);
+    }
+    100% {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  @keyframes msg-sending {
+    0%, 100% {
+      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
+    }
+    50% {
+      box-shadow: 0 1px 10px rgba(84, 132, 255, 0.24);
+    }
+  }
+
+  .animate-msg-send-in {
+    animation: msg-send-in 180ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+    will-change: transform, opacity, filter;
+  }
+
+  .animate-msg-recv-in {
+    animation: msg-recv-in 170ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+    will-change: transform, opacity, filter;
+  }
+
+  .animate-msg-sending {
+    animation: msg-sending 1.2s ease-in-out infinite;
+  }
+
+  /* Telegram-like horizontal swipe transition for tab content */
+  @keyframes tab-swipe-in-left {
+    from {
+      opacity: 0.6;
+      transform: translate3d(26px, 0, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes tab-swipe-in-right {
+    from {
+      opacity: 0.6;
+      transform: translate3d(-26px, 0, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  .animate-tab-swipe-in-left {
+    animation: tab-swipe-in-left 220ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    will-change: transform, opacity;
+  }
+
+  .animate-tab-swipe-in-right {
+    animation: tab-swipe-in-right 220ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    will-change: transform, opacity;
   }
 
   /* Attachment menu slide-up */
@@ -1762,6 +1921,126 @@
   .chat-message-row {
     contain: layout style;
   }
+
+/* ═══════════════════════════════════════════════════════════════
+   EXIT ANIMATIONS — reverse of enter animations for smooth unmount
+   ═══════════════════════════════════════════════════════════════ */
+
+@keyframes fade-scale-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.96); }
+}
+.animate-fade-scale-out {
+  animation: fade-scale-out 120ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  pointer-events: none;
+}
+
+@keyframes backdrop-out {
+  from { opacity: 1; backdrop-filter: blur(4px); }
+  to   { opacity: 0; backdrop-filter: blur(0px); }
+}
+.animate-backdrop-out {
+  animation: backdrop-out 200ms ease-in both;
+  pointer-events: none;
+}
+
+@keyframes picker-slide-down {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(12px) scale(0.98); }
+}
+.animate-picker-slide-down {
+  animation: picker-slide-down 120ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  pointer-events: none;
+}
+
+@keyframes attachment-menu-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(8px) scale(0.95); }
+}
+.animate-attachment-menu-out {
+  animation: attachment-menu-out 150ms ease-in both;
+  pointer-events: none;
+}
+
+@keyframes fade-slide-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(8px); }
+}
+.animate-fade-slide-out {
+  animation: fade-slide-out 120ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  pointer-events: none;
+}
+
+@keyframes pin-panel-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-8px); }
+}
+.animate-pin-panel-out {
+  animation: pin-panel-out 180ms ease-in both;
+  pointer-events: none;
+}
+
+@keyframes overlay-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(16px) scale(0.97); }
+}
+.animate-overlay-out {
+  animation: overlay-out 250ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  pointer-events: none;
+}
+
+@keyframes slide-to-right {
+  from { transform: translateX(0); }
+  to   { transform: translateX(100%); }
+}
+.animate-slide-to-right {
+  animation: slide-to-right 250ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  pointer-events: none;
+}
+
+@keyframes slide-to-left {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}
+.animate-slide-to-left {
+  animation: slide-to-left 250ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  pointer-events: none;
+}
+
+/* Ripple effect for interactive elements */
+@keyframes ripple-expand {
+  from {
+    transform: scale(0);
+    opacity: 0.4;
+  }
+  to {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+.ripple-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.ripple-effect {
+  position: absolute;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  animation: ripple-expand 500ms cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+}
+
+/* Route page transitions */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(6px) scale(0.995); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-page-enter {
+  animation: page-enter 200ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+}
 
 /* Accessibility: reduced motion */
 @media (prefers-reduced-motion: reduce) {

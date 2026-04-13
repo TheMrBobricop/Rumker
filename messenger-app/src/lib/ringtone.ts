@@ -1,10 +1,10 @@
-class Ringtone {
+﻿class Ringtone {
     private audioCtx: AudioContext | null = null;
     private intervalId: number | null = null;
     private playing = false;
     private mode: 'incoming' | 'caller' | null = null;
 
-    /** Incoming ring — Telegram-style dual-frequency phone ring (425Hz + 350Hz, 1s ring / 4s pause) */
+    /** Incoming ring пїЅ Telegram-style dual-frequency phone ring (425Hz + 350Hz, 1s ring / 4s pause) */
     start(): void {
         if (this.playing) return;
         this.playing = true;
@@ -46,7 +46,7 @@ class Ringtone {
         this.intervalId = window.setInterval(playRing, 5000); // 1s ring + 4s pause
     }
 
-    /** Caller-side ringback tone — single 425Hz, 1s on / 4s off (what caller hears while ringing) */
+    /** Caller-side ringback tone пїЅ single 425Hz, 1s on / 4s off (what caller hears while ringing) */
     startCallerTone(): void {
         if (this.playing) return;
         this.playing = true;
@@ -103,3 +103,5 @@ class Ringtone {
 }
 
 export const ringtone = new Ringtone();
+
+

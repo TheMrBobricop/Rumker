@@ -1,4 +1,4 @@
-// Простое хранилище токена как fallback
+﻿// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ fallback
 class TokenStorage {
   private static instance: TokenStorage;
   private token: string | null = null;
@@ -33,3 +33,5 @@ class TokenStorage {
 }
 
 export const tokenStorage = TokenStorage.getInstance();
+
+

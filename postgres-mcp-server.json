@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "postgres-mcp-server": {
+      "command": "npx",
+      "args": [
+        "@ahmedmustahid/postgres-mcp-server",
+        "stdio"
+      ],
+      "env": {
+        "POSTGRES_USERNAME": "your-username",
+        "POSTGRES_PASSWORD": "your-password",
+        "POSTGRES_HOST": "hostname",
+        "POSTGRES_DATABASE": "database-name"
+      }
+    }
+  }
+}

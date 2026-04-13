@@ -1,4 +1,4 @@
-import { useVoiceChannelStore } from '@/stores/voiceChannelStore';
+﻿import { useVoiceChannelStore } from '@/stores/voiceChannelStore';
 import { voiceChannelPeerManager } from '@/lib/webrtc/VoiceChannelPeerManager';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Monitor, X, Maximize2 } from 'lucide-react';

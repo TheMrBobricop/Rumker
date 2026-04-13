@@ -16,5 +16,9 @@
       "Bash(NODE_ENV=production npx tsx:*)",
       "Bash(taskkill:*)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "vercel"
+  ],
+  "enableAllProjectMcpServers": true
 }

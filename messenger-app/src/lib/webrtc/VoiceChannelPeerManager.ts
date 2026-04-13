@@ -1,4 +1,4 @@
-import { socketService } from '@/lib/socket';
+﻿import { socketService } from '@/lib/socket';
 import { useVoiceChannelStore } from '@/stores/voiceChannelStore';
 import type { ConnectionQualityLevel, ConnectionStats } from '@/types';
 
@@ -45,7 +45,6 @@ function mungeOpusSdp(sdp: string | undefined): string | undefined {
 
 /**
  * Voice Channel PeerManager with support for:
- * - Audio (mic) with PTT and Noise Gate
  * - Simultaneous screen share + camera (two video tracks at once)
  * - Remote video stream tracking with callbacks
  * - Connection quality monitoring
@@ -62,9 +61,6 @@ class VoiceChannelPeerManager {
     private speakingInterval: ReturnType<typeof setInterval> | null = null;
     private wasSpeaking = false;
 
-    // Noise gate — audio processing node chain
-    private noiseGateNode: GainNode | null = null;
-    private localGainNode: GainNode | null = null;
 
     // Connection quality monitoring
     private statsInterval: ReturnType<typeof setInterval> | null = null;
@@ -76,11 +72,11 @@ class VoiceChannelPeerManager {
     private originalVolumes = new Map<string, number>();
     private isDucking = false;
 
-    // ── Separate screen / camera senders per peer ──
+    // -- Separate screen / camera senders per peer --
     private screenSenders = new Map<string, RTCRtpSender>();
     private cameraSenders = new Map<string, RTCRtpSender>();
 
-    // ── Remote video streams ──
+    // -- Remote video streams --
     private remoteVideoStreams = new Map<string, MediaStream[]>();
     private videoChangeCallbacks: ((streams: Map<string, MediaStream[]>) => void)[] = [];
 
@@ -116,11 +112,11 @@ class VoiceChannelPeerManager {
         return stream;
     }
 
-    // ═════════════════════════════════════════
+    // ----------------------------------------
     //  Push-to-Talk
-    // ═════════════════════════════════════════
+    // ----------------------------------------
 
-    /** Set PTT state — enables/disables audio track */
+    /** Set PTT state -- enables/disables audio track */
     setPTTState(active: boolean): void {
         if (!this.localStream) return;
         const settings = useVoiceChannelStore.getState().voiceSettings;
@@ -139,11 +135,9 @@ class VoiceChannelPeerManager {
         useVoiceChannelStore.getState().setPTTActive(active);
     }
 
-    // ═════════════════════════════════════════
-    //  Voice Activity Detection + Noise Gate
-    // ═════════════════════════════════════════
+    // ----------------------------------------
+    // ----------------------------------------
 
-    /** Start VAD — emits voice:speaking events, applies noise gate */
     startVoiceActivityDetection(): void {
         if (this.speakingInterval || !this.localStream) return;
 
@@ -165,13 +159,12 @@ class VoiceChannelPeerManager {
 
             const settings = useVoiceChannelStore.getState().voiceSettings;
 
-            // In PTT mode, skip VAD — speaking state is controlled by setPTTState
+            // In PTT mode, skip VAD -- speaking state is controlled by setPTTState
             if (settings.inputMode === 'pushToTalk') return;
 
             const threshold = settings.noiseGateEnabled ? settings.noiseGateThreshold : 15;
             const isSpeaking = avg > threshold;
 
-            // Noise gate: actually mute/unmute the audio track
             if (settings.noiseGateEnabled && this.localStream) {
                 for (const track of this.localStream.getAudioTracks()) {
                     // Don't override manual mute
@@ -211,9 +204,9 @@ class VoiceChannelPeerManager {
         return Math.min(100, (avg / 128) * 100);
     }
 
-    // ═════════════════════════════════════════
+    // ----------------------------------------
     //  Connection Quality Monitoring
-    // ═════════════════════════════════════════
+    // ----------------------------------------
 
     startConnectionMonitoring(): void {
         if (this.statsInterval) return;
@@ -300,9 +293,9 @@ class VoiceChannelPeerManager {
         return 'poor';
     }
 
-    // ═════════════════════════════════════════
+    // ----------------------------------------
     //  Priority Speaker Volume Ducking
-    // ═════════════════════════════════════════
+    // ----------------------------------------
 
     /** When priority speaker starts talking, duck all other audio */
     applyPrioritySpeakerDucking(priorityUserId: string, isSpeaking: boolean): void {
@@ -330,9 +323,9 @@ class VoiceChannelPeerManager {
         }
     }
 
-    // ═════════════════════════════════════════
+    // ----------------------------------------
     //  Remote video stream subscriptions
-    // ═════════════════════════════════════════
+    // ----------------------------------------
 
     /** Subscribe to remote video stream changes. Returns unsubscribe fn. */
     onRemoteVideoChange(cb: (streams: Map<string, MediaStream[]>) => void): () => void {
@@ -353,9 +346,9 @@ class VoiceChannelPeerManager {
         return new Map(this.remoteVideoStreams);
     }
 
-    // ═════════════════════════════════════════
+    // ----------------------------------------
     //  Peer connection management
-    // ═════════════════════════════════════════
+    // ----------------------------------------
 
     /** Create a peer connection to another user */
     createPeer(userId: string, initiator: boolean): void {
@@ -383,7 +376,7 @@ class VoiceChannelPeerManager {
             }
         };
 
-        // ── Handle remote tracks (audio + video) ──
+        // -- Handle remote tracks (audio + video) --
         pc.ontrack = (event) => {
             const stream = event.streams[0] || new MediaStream([event.track]);
 
@@ -585,9 +578,9 @@ class VoiceChannelPeerManager {
         }
     }
 
-    // ═════════════════════════════════════════
+    // ----------------------------------------
     //  Screen share track management
-    // ═════════════════════════════════════════
+    // ----------------------------------------
 
     /** Add screen share video track to all peers (separate from camera) */
     addScreenTrack(stream: MediaStream): void {
@@ -617,9 +610,9 @@ class VoiceChannelPeerManager {
         this.renegotiateAll();
     }
 
-    // ═════════════════════════════════════════
+    // ----------------------------------------
     //  Camera track management
-    // ═════════════════════════════════════════
+    // ----------------------------------------
 
     /** Add camera video track to all peers (separate from screen share) */
     addCameraTrack(stream: MediaStream): void {
@@ -648,9 +641,9 @@ class VoiceChannelPeerManager {
         this.renegotiateAll();
     }
 
-    // ═════════════════════════════════════════
+    // ----------------------------------------
     //  Legacy compatibility
-    // ═════════════════════════════════════════
+    // ----------------------------------------
 
     /** @deprecated Use addScreenTrack or addCameraTrack instead */
     addVideoTrack(stream: MediaStream): void {
@@ -663,9 +656,9 @@ class VoiceChannelPeerManager {
         this.removeCameraTrack();
     }
 
-    // ═════════════════════════════════════════
+    // ----------------------------------------
     //  Mute / Deafen / Cleanup
-    // ═════════════════════════════════════════
+    // ----------------------------------------
 
     setMuted(muted: boolean): void {
         if (this.localStream) {
@@ -761,3 +754,7 @@ class VoiceChannelPeerManager {
 }
 
 export const voiceChannelPeerManager = new VoiceChannelPeerManager();
+
+
+
+

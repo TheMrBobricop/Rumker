@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import { telegramService } from '../services/telegram.js';
 import { generateToken, generateRefreshToken, verifyRefreshToken, authenticateToken, type AuthRequest } from '../middleware/auth.js';
 import { supabase } from '../lib/supabase.js';
@@ -13,14 +13,59 @@ import { registerSchema, loginEmailSchema, sendCodeSchema, signInSchema, checkPa
 import { loginLimiter, registerLimiter, refreshLimiter, telegramAuthLimiter } from '../lib/security.js';
 
 const router = Router();
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const REFRESH_COOKIE_SAME_SITE: 'lax' | 'none' = IS_PRODUCTION ? 'none' : 'lax';
+const IS_DEV = process.env.NODE_ENV !== 'production';
 
-// 1. Отправка кода
+type SupabaseErrorLike = {
+    message?: string;
+    details?: string;
+    hint?: string;
+    code?: string;
+} | null | undefined;
+
+function setRefreshCookie(res: any, refreshToken: string) {
+    res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: IS_PRODUCTION,
+        sameSite: REFRESH_COOKIE_SAME_SITE,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+}
+
+function formatSupabaseError(error: SupabaseErrorLike): string {
+    if (!error) return 'Unknown database error';
+    const chunks = [error.message, error.details, error.hint, error.code].filter(Boolean);
+    return chunks.join(' | ') || 'Unknown database error';
+}
+
+function isSupabaseUnavailable(error: SupabaseErrorLike): boolean {
+    const text = formatSupabaseError(error).toLowerCase();
+    return (
+        text.includes('fetch failed') ||
+        text.includes('enotfound') ||
+        text.includes('econnrefused') ||
+        text.includes('etimedout') ||
+        text.includes('network')
+    );
+}
+
+function respondSupabaseError(res: Response, error: SupabaseErrorLike, fallbackMessage = 'Database request failed') {
+    const unavailable = isSupabaseUnavailable(error);
+    const details = formatSupabaseError(error);
+    return res.status(unavailable ? 503 : 500).json({
+        error: unavailable ? 'Database is temporarily unavailable' : fallbackMessage,
+        ...(IS_DEV ? { details } : {}),
+    });
+}
+
+// 1. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
 router.post('/telegram/send-code', telegramAuthLimiter, validateBody(sendCodeSchema), async (req, res) => {
     try {
         const { phoneNumber } = req.body;
 
-        // В реальном продакшене `userId` должен быть сессионным или временным идентификатором
-        // Для простоты используем номер телефона как временный ID сессии
+        // пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ `userId` пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+        // пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ ID пїЅпїЅпїЅпїЅпїЅпїЅ
         const formattedPhone = phoneNumber.replace(/\D/g, '');
 
         const { phoneCodeHash } = await telegramService.sendCode(formattedPhone, phoneNumber);
@@ -33,23 +78,23 @@ router.post('/telegram/send-code', telegramAuthLimiter, validateBody(sendCodeSch
     }
 });
 
-// 2. Вход по коду
+// 2. пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅ
 router.post('/telegram/sign-in', telegramAuthLimiter, validateBody(signInSchema), async (req, res) => {
     try {
         const { phoneNumber, phoneCodeHash, phoneCode } = req.body;
         const formattedPhone = phoneNumber.replace(/\D/g, '');
 
-        // Выполняем вход через gram.js
-        // TODO: Поддержка 2FA пароля (если error.message === 'SESSION_PASSWORD_NEEDED')
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ gram.js
+        // TODO: пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ 2FA пїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅ error.message === 'SESSION_PASSWORD_NEEDED')
         const { sessionString } = await telegramService.signIn(formattedPhone, phoneNumber, phoneCodeHash, phoneCode);
 
-        // Получаем инфо о пользователе через клиент
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
         const client = await telegramService.initializeClient(formattedPhone, sessionString);
         const me = await client.getMe() as unknown as { id: number; username?: string; firstName?: string; lastName?: string };
 
         if (!me) throw new Error('Failed to get user info');
 
-        // Сохраняем/Обновляем пользователя в Supabase
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ/пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ Supabase
         const telegramId = me.id.toString();
         const { data: existingUser } = await supabase
             .from('users')
@@ -92,11 +137,11 @@ router.post('/telegram/sign-in', telegramAuthLimiter, validateBody(signInSchema)
             user = created;
         }
 
-        // Генерируем наши JWT токены для API
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ JWT пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ API
         const accessToken = generateToken({ userId: user.id, username: user.username });
         const refreshToken = generateRefreshToken({ userId: user.id });
 
-        // Сохраняем рефреш сессию в Supabase
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ Supabase
         await supabase
             .from('sessions')
             .insert({
@@ -105,13 +150,8 @@ router.post('/telegram/sign-in', telegramAuthLimiter, validateBody(signInSchema)
                 expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
             });
 
-        // Отправляем токены клиенту (refresh в httpOnly cookie)
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ (refresh пїЅ httpOnly cookie)
+        setRefreshCookie(res, refreshToken);
 
         res.json({
             accessToken,
@@ -134,7 +174,7 @@ router.post('/telegram/sign-in', telegramAuthLimiter, validateBody(signInSchema)
     }
 });
 
-// 3. Проверка 2FA пароля
+// 3. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ 2FA пїЅпїЅпїЅпїЅпїЅпїЅ
 router.post('/telegram/check-password', telegramAuthLimiter, validateBody(checkPasswordSchema), async (req, res) => {
     try {
         const { phoneNumber, password } = req.body;
@@ -142,13 +182,13 @@ router.post('/telegram/check-password', telegramAuthLimiter, validateBody(checkP
 
         const { sessionString } = await telegramService.checkPassword(formattedPhone, password);
 
-        // Получаем инфо о пользователе
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         const client = await telegramService.initializeClient(formattedPhone, sessionString);
         const me = await client.getMe() as unknown as { id: number; username?: string; firstName?: string; lastName?: string };
 
         if (!me) throw new Error('Failed to get user info');
 
-        // Сохраняем/Обновляем пользователя в Supabase
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ/пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ Supabase
         const telegramId = me.id.toString();
         const { data: existingUser } = await supabase
             .from('users')
@@ -200,12 +240,7 @@ router.post('/telegram/check-password', telegramAuthLimiter, validateBody(checkP
                 expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
             });
 
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        setRefreshCookie(res, refreshToken);
 
         res.json({
             accessToken,
@@ -218,23 +253,32 @@ router.post('/telegram/check-password', telegramAuthLimiter, validateBody(checkP
         });
     } catch (error: unknown) {
         console.error('Check Password Error:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Неверный пароль';
+        const errorMessage = error instanceof Error ? error.message : 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ';
         res.status(400).json({ error: errorMessage });
     }
 });
 
 // --- Email Authentication ---
 
-// Регистрация через Email
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ Email
 router.post('/register', registerLimiter, validateBody(registerSchema), async (req, res) => {
     try {
         const { username, email, password } = req.body;
+        const normalizedEmail = String(email).trim().toLowerCase();
+        const normalizedUsername = String(username).trim();
 
-        // Проверяем существующего пользователя (parallel queries)
-        const [{ data: byEmail }, { data: byUsername }] = await Promise.all([
-            supabase.from('users').select('id').eq('email', email).limit(1).maybeSingle(),
-            supabase.from('users').select('id').eq('username', username).limit(1).maybeSingle(),
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (parallel queries)
+        const [byEmailResult, byUsernameResult] = await Promise.all([
+            supabase.from('users').select('id').ilike('email', normalizedEmail).limit(1).maybeSingle(),
+            supabase.from('users').select('id').eq('username', normalizedUsername).limit(1).maybeSingle(),
         ]);
+
+        if (byEmailResult.error || byUsernameResult.error) {
+            return respondSupabaseError(res, byEmailResult.error || byUsernameResult.error, 'Failed to validate account data');
+        }
+
+        const byEmail = byEmailResult.data;
+        const byUsername = byUsernameResult.data;
 
         const existingUser = byEmail || byUsername;
 
@@ -242,25 +286,25 @@ router.post('/register', registerLimiter, validateBody(registerSchema), async (r
             return res.status(400).json({ error: 'User with this email or username already exists' });
         }
 
-        // Создаем хеш пароля
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(password, salt);
 
-        // Создаем пользователя в Supabase
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ Supabase
         const { data: user, error: createError } = await supabase
             .from('users')
             .insert({
-                username,
-                email,
+                username: normalizedUsername,
+                email: normalizedEmail,
                 password: passwordHash,
-                first_name: username,
+                first_name: normalizedUsername,
             })
             .select()
             .single();
 
         if (createError) {
             console.error('Create user error:', createError);
-            return res.status(500).json({ error: 'Failed to create user' });
+            return respondSupabaseError(res, createError, 'Failed to create user');
         }
 
         // Generate tokens
@@ -278,14 +322,12 @@ router.post('/register', registerLimiter, validateBody(registerSchema), async (r
 
         if (sessionError) {
             console.error('Session save error:', sessionError);
+            if (isSupabaseUnavailable(sessionError)) {
+                return respondSupabaseError(res, sessionError, 'Failed to create session');
+            }
         }
 
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        setRefreshCookie(res, refreshToken);
 
         res.status(201).json({
             accessToken,
@@ -301,27 +343,102 @@ router.post('/register', registerLimiter, validateBody(registerSchema), async (r
     } catch (error: unknown) {
         console.error('Registration Error:', error);
         const errorMessage = error instanceof Error ? error.message : 'Registration failed';
-        res.status(400).json({ error: errorMessage });
+        res.status(500).json({
+            error: 'Registration failed',
+            ...(IS_DEV ? { details: errorMessage } : {}),
+        });
     }
 });
 
-// Вход через Email
+// пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ Email
 router.post('/login', loginLimiter, validateBody(loginEmailSchema), async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { email, password, userId } = req.body as { email?: string; password: string; userId?: string };
+        const normalizedLogin = String(email || '').normalize('NFKC').trim().toLowerCase();
+        const fields = 'id, username, email, password, first_name, last_name';
 
-        const { data: user, error } = await supabase
-            .from('users')
-            .select('id, username, email, password, first_name, last_name')
-            .eq('email', email)
-            .single();
-            
-        if (error || !user || !user.password) {
+        const candidates: any[] = [];
+        if (userId) {
+            const byIdRes = await supabase
+                .from('users')
+                .select(fields)
+                .eq('id', userId)
+                .limit(1);
+            if (byIdRes.error) {
+                return respondSupabaseError(res, byIdRes.error, 'Failed to fetch user');
+            }
+            if (byIdRes.data?.length) {
+                candidates.push(...byIdRes.data);
+            }
+        }
+
+        if (normalizedLogin) {
+            const [byEmailRes, byUsernameRes] = await Promise.all([
+                supabase
+                    .from('users')
+                    .select(fields)
+                    .ilike('email', normalizedLogin)
+                    .limit(10),
+                supabase
+                    .from('users')
+                    .select(fields)
+                    .eq('username', normalizedLogin)
+                    .limit(10),
+            ]);
+
+            if (byEmailRes.error || byUsernameRes.error) {
+                return respondSupabaseError(res, byEmailRes.error || byUsernameRes.error, 'Failed to fetch user');
+            }
+
+            const byEmail = byEmailRes.data || [];
+            const byUsername = byUsernameRes.data || [];
+            candidates.push(...byEmail, ...byUsername);
+        }
+
+        const dedupedCandidates = [...new Map(candidates.map((u: any) => [u.id, u])).values()];
+
+        if (dedupedCandidates.length === 0) {
             return res.status(401).json({ error: 'Invalid email or password' });
         }
 
-        const isValid = await bcrypt.compare(password, user.password);
-        if (!isValid) {
+        let user = null as any;
+        let hasPasswordless = false;
+
+        for (const candidate of dedupedCandidates) {
+            if (!candidate.password) {
+                hasPasswordless = true;
+                continue;
+            }
+
+            let isValid = false;
+            try {
+                isValid = await bcrypt.compare(password, candidate.password);
+            } catch {
+                isValid = false;
+            }
+
+            // Legacy migration: if a historical plain password slipped in, rehash on successful login.
+            const isLegacyPlain = !isValid && candidate.password === password;
+            if (isLegacyPlain) {
+                const salt = await bcrypt.genSalt(10);
+                const passwordHash = await bcrypt.hash(password, salt);
+                const { error: updateErr } = await supabase.from('users').update({ password: passwordHash }).eq('id', candidate.id);
+                if (updateErr && isSupabaseUnavailable(updateErr)) {
+                    return respondSupabaseError(res, updateErr, 'Failed to update user password');
+                }
+                isValid = true;
+            }
+
+            if (isValid) {
+                user = candidate;
+                break;
+            }
+        }
+
+        if (!user) {
+            if (hasPasswordless) {
+                return res.status(401).json({ error: 'Use Telegram login for this account' });
+            }
             return res.status(401).json({ error: 'Invalid email or password' });
         }
 
@@ -340,14 +457,12 @@ router.post('/login', loginLimiter, validateBody(loginEmailSchema), async (req, 
 
         if (sessionError) {
             console.error('Session save error:', sessionError);
+            if (isSupabaseUnavailable(sessionError)) {
+                return respondSupabaseError(res, sessionError, 'Failed to create session');
+            }
         }
 
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        setRefreshCookie(res, refreshToken);
 
         res.json({
             accessToken,
@@ -363,7 +478,10 @@ router.post('/login', loginLimiter, validateBody(loginEmailSchema), async (req, 
     } catch (error: unknown) {
         console.error('Login Error:', error);
         const errorMessage = error instanceof Error ? error.message : 'Login failed';
-        res.status(400).json({ error: errorMessage });
+        res.status(500).json({
+            error: 'Login failed',
+            ...(IS_DEV ? { details: errorMessage } : {}),
+        });
     }
 });
 
@@ -382,7 +500,14 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res) => {
             .eq('id', userId)
             .single();
 
-        if (error || !user) {
+        if (error) {
+            if (isSupabaseUnavailable(error)) {
+                return respondSupabaseError(res, error, 'Failed to load user');
+            }
+            return res.status(500).json({ error: 'Failed to load user' });
+        }
+
+        if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
 
@@ -404,7 +529,7 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res) => {
     }
 });
 
-// Logout — invalidate session and clear cookie
+// Logout пїЅ invalidate session and clear cookie
 router.post('/logout', authenticateToken, async (req: AuthRequest, res) => {
     try {
         const userId = req.user?.userId;
@@ -422,8 +547,8 @@ router.post('/logout', authenticateToken, async (req: AuthRequest, res) => {
         // Clear the refresh token cookie
         res.clearCookie('refreshToken', {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            secure: IS_PRODUCTION,
+            sameSite: REFRESH_COOKIE_SAME_SITE,
         });
 
         res.json({ success: true });
@@ -433,10 +558,10 @@ router.post('/logout', authenticateToken, async (req: AuthRequest, res) => {
     }
 });
 
-// Обновление access token
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ access token
 router.post('/refresh', refreshLimiter, async (req, res) => {
     try {
-        // Берём refreshToken из cookie или из body
+        // пїЅпїЅпїЅпїЅ refreshToken пїЅпїЅ cookie пїЅпїЅпїЅ пїЅпїЅ body
         const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
         if (!refreshToken) {
@@ -459,7 +584,14 @@ router.post('/refresh', refreshLimiter, async (req, res) => {
             .eq('user_id', payload.userId)
             .single();
 
-        if (sessionError || !session) {
+        if (sessionError) {
+            if (isSupabaseUnavailable(sessionError)) {
+                return respondSupabaseError(res, sessionError, 'Failed to validate session');
+            }
+            return res.status(403).json({ error: 'Session not found' });
+        }
+
+        if (!session) {
             return res.status(403).json({ error: 'Session not found' });
         }
 
@@ -470,13 +602,20 @@ router.post('/refresh', refreshLimiter, async (req, res) => {
             .eq('id', payload.userId)
             .single();
 
-        if (userError || !user) {
+        if (userError) {
+            if (isSupabaseUnavailable(userError)) {
+                return respondSupabaseError(res, userError, 'Failed to load user');
+            }
+            return res.status(500).json({ error: 'Failed to load user' });
+        }
+
+        if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // Generate only a new access token — do NOT rotate the refresh token
+        // Generate only a new access token пїЅ do NOT rotate the refresh token
         // Rotating causes race conditions: if the response is lost, the client
-        // still holds the old token which no longer exists in DB → forced logout.
+        // still holds the old token which no longer exists in DB в†’ forced logout.
         const newAccessToken = generateToken({ userId: user.id, username: user.username });
 
         res.json({

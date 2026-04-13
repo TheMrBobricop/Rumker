@@ -1,5 +1,5 @@
-/**
- * VideoEffectsProcessor — Canvas-based video processing pipeline.
+﻿/**
+ * VideoEffectsProcessor пїЅ Canvas-based video processing pipeline.
  * Takes a raw camera MediaStream, applies visual effects (filters, face masks),
  * and outputs a processed MediaStream via canvas.captureStream().
  */
@@ -30,15 +30,15 @@ export interface EffectInfo {
 }
 
 export const EFFECTS: EffectInfo[] = [
-    { id: 'none', label: 'Без эффекта', emoji: '⛔', category: 'filter' },
+    { id: 'none', label: 'Без эффектов', emoji: '⛔', category: 'filter' },
     { id: 'grayscale', label: 'Ч/Б', emoji: '🖤', category: 'filter' },
     { id: 'sepia', label: 'Сепия', emoji: '📜', category: 'filter' },
-    { id: 'warm', label: 'Тёплый', emoji: '🌅', category: 'filter' },
+    { id: 'warm', label: 'Теплый', emoji: '🌅', category: 'filter' },
     { id: 'cool', label: 'Холодный', emoji: '❄️', category: 'filter' },
-    { id: 'nightvision', label: 'Ноч. зрение', emoji: '🌙', category: 'filter' },
+    { id: 'nightvision', label: 'Ночное зрение', emoji: '🌙', category: 'filter' },
     { id: 'invert', label: 'Инверсия', emoji: '🔄', category: 'filter' },
     { id: 'contrast', label: 'Контраст', emoji: '🎨', category: 'filter' },
-    { id: 'blur', label: 'Блюр', emoji: '💨', category: 'filter' },
+    { id: 'blur', label: 'Размытие', emoji: '💨', category: 'filter' },
     { id: 'vignette', label: 'Виньетка', emoji: '📷', category: 'filter' },
     { id: 'mask-sunglasses', label: 'Очки', emoji: '🕶️', category: 'mask' },
     { id: 'mask-cat', label: 'Кот', emoji: '🐱', category: 'mask' },
@@ -267,58 +267,58 @@ class VideoEffectsProcessor {
                 case 'mask-sunglasses': {
                     const emojiSize = width * 0.7;
                     ctx.font = `${emojiSize}px serif`;
-                    ctx.fillText('🕶️', x + width / 2, y + height * 0.38);
+                    ctx.fillText('рџ•¶пёЏ', x + width / 2, y + height * 0.38);
                     break;
                 }
                 case 'mask-cat': {
                     // Cat ears on top
                     const earSize = width * 0.4;
                     ctx.font = `${earSize}px serif`;
-                    ctx.fillText('🐱', x + width * 0.2, y - height * 0.05);
-                    ctx.fillText('🐱', x + width * 0.8, y - height * 0.05);
+                    ctx.fillText('рџђ±', x + width * 0.2, y - height * 0.05);
+                    ctx.fillText('рџђ±', x + width * 0.8, y - height * 0.05);
                     // Cat nose
                     const noseSize = width * 0.25;
                     ctx.font = `${noseSize}px serif`;
-                    ctx.fillText('🐾', x + width / 2, y + height * 0.65);
+                    ctx.fillText('рџђѕ', x + width / 2, y + height * 0.65);
                     break;
                 }
                 case 'mask-crown': {
                     const crownSize = width * 0.7;
                     ctx.font = `${crownSize}px serif`;
-                    ctx.fillText('👑', x + width / 2, y - height * 0.15);
+                    ctx.fillText('рџ‘‘', x + width / 2, y - height * 0.15);
                     break;
                 }
                 case 'mask-hearts': {
                     const heartSize = width * 0.35;
                     ctx.font = `${heartSize}px serif`;
                     // Hearts around face
-                    ctx.fillText('💖', x + width * 0.15, y + height * 0.3);
-                    ctx.fillText('💖', x + width * 0.85, y + height * 0.3);
-                    ctx.fillText('💕', x + width / 2, y - height * 0.1);
-                    ctx.fillText('✨', x - width * 0.05, y + height * 0.6);
-                    ctx.fillText('✨', x + width * 1.05, y + height * 0.6);
+                    ctx.fillText('рџ’–', x + width * 0.15, y + height * 0.3);
+                    ctx.fillText('рџ’–', x + width * 0.85, y + height * 0.3);
+                    ctx.fillText('рџ’•', x + width / 2, y - height * 0.1);
+                    ctx.fillText('вњЁ', x - width * 0.05, y + height * 0.6);
+                    ctx.fillText('вњЁ', x + width * 1.05, y + height * 0.6);
                     break;
                 }
                 case 'mask-clown': {
                     // Clown nose
                     const noseSize = width * 0.3;
                     ctx.font = `${noseSize}px serif`;
-                    ctx.fillText('🔴', x + width / 2, y + height * 0.52);
+                    ctx.fillText('рџ”ґ', x + width / 2, y + height * 0.52);
                     // Clown wig
                     const wigSize = width * 0.5;
                     ctx.font = `${wigSize}px serif`;
-                    ctx.fillText('🤡', x + width / 2, y - height * 0.08);
+                    ctx.fillText('рџ¤Ў', x + width / 2, y - height * 0.08);
                     break;
                 }
                 case 'mask-fire': {
                     const fireSize = width * 0.35;
                     ctx.font = `${fireSize}px serif`;
                     // Fire around head
-                    ctx.fillText('🔥', x + width * 0.1, y - height * 0.05);
-                    ctx.fillText('🔥', x + width * 0.5, y - height * 0.15);
-                    ctx.fillText('🔥', x + width * 0.9, y - height * 0.05);
-                    ctx.fillText('🔥', x - width * 0.05, y + height * 0.4);
-                    ctx.fillText('🔥', x + width * 1.05, y + height * 0.4);
+                    ctx.fillText('рџ”Ґ', x + width * 0.1, y - height * 0.05);
+                    ctx.fillText('рџ”Ґ', x + width * 0.5, y - height * 0.15);
+                    ctx.fillText('рџ”Ґ', x + width * 0.9, y - height * 0.05);
+                    ctx.fillText('рџ”Ґ', x - width * 0.05, y + height * 0.4);
+                    ctx.fillText('рџ”Ґ', x + width * 1.05, y + height * 0.4);
                     break;
                 }
             }
@@ -344,18 +344,18 @@ class VideoEffectsProcessor {
         ctx.font = `${size}px serif`;
 
         switch (this.currentEffect) {
-            case 'mask-sunglasses': ctx.fillText('🕶️', cx, cy * 0.7); break;
-            case 'mask-cat': ctx.fillText('😺', cx, cy * 0.3); break;
-            case 'mask-crown': ctx.fillText('👑', cx, cy * 0.3); break;
+            case 'mask-sunglasses': ctx.fillText('рџ•¶пёЏ', cx, cy * 0.7); break;
+            case 'mask-cat': ctx.fillText('рџє', cx, cy * 0.3); break;
+            case 'mask-crown': ctx.fillText('рџ‘‘', cx, cy * 0.3); break;
             case 'mask-hearts':
-                ctx.fillText('💖', cx - size, cy * 0.5);
-                ctx.fillText('💖', cx + size, cy * 0.5);
+                ctx.fillText('рџ’–', cx - size, cy * 0.5);
+                ctx.fillText('рџ’–', cx + size, cy * 0.5);
                 break;
-            case 'mask-clown': ctx.fillText('🤡', cx, cy * 0.35); break;
+            case 'mask-clown': ctx.fillText('рџ¤Ў', cx, cy * 0.35); break;
             case 'mask-fire':
-                ctx.fillText('🔥', cx - size, cy * 0.3);
-                ctx.fillText('🔥', cx, cy * 0.2);
-                ctx.fillText('🔥', cx + size, cy * 0.3);
+                ctx.fillText('рџ”Ґ', cx - size, cy * 0.3);
+                ctx.fillText('рџ”Ґ', cx, cy * 0.2);
+                ctx.fillText('рџ”Ґ', cx + size, cy * 0.3);
                 break;
         }
 
@@ -364,3 +364,5 @@ class VideoEffectsProcessor {
 }
 
 export const videoEffects = new VideoEffectsProcessor();
+
+

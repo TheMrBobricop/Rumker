@@ -1,4 +1,4 @@
-import { useEffect, useRef, memo } from 'react';
+﻿import { useEffect, useRef, memo } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MicOff, HeadphoneOff } from 'lucide-react';
 import { cn } from '@/lib/utils';

@@ -1,4 +1,4 @@
-import { io, Socket } from 'socket.io-client';
+﻿import { io, Socket } from 'socket.io-client';
 import type { Message } from '@/types';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -11,7 +11,7 @@ class SocketService {
         // Reuse existing socket if already connected or connecting
         if (this.socket) {
             if (this.socket.connected) return;
-            // Socket exists but disconnected — update token and reconnect
+            // Socket exists but disconnected пїЅ update token and reconnect
             (this.socket.auth as any).token = token;
             this.socket.connect();
             return;
@@ -35,7 +35,7 @@ class SocketService {
 
         this.socket.on('disconnect', (reason) => {
             console.warn('[Socket] Disconnected:', reason);
-            // Server forced disconnect — try to refresh token and reconnect
+            // Server forced disconnect пїЅ try to refresh token and reconnect
             if (reason === 'io server disconnect') {
                 this._tryRefreshAndReconnect();
             }
@@ -44,7 +44,7 @@ class SocketService {
 
         this.socket.on('connect_error', (err) => {
             console.error('[Socket] Connection error:', err.message);
-            // Auth errors — try to refresh the JWT
+            // Auth errors пїЅ try to refresh the JWT
             if (err.message.includes('Invalid token') || err.message.includes('Authentication')) {
                 this._tryRefreshAndReconnect();
             }
@@ -67,7 +67,7 @@ class SocketService {
         try {
             const authStore = useAuthStore.getState();
 
-            // Refresh token передаётся только через httpOnly cookie (credentials: 'include')
+            // Refresh token пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ httpOnly cookie (credentials: 'include')
             const response = await fetch('/api/auth/refresh', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -76,7 +76,7 @@ class SocketService {
 
             if (response.ok) {
                 const data = await response.json();
-                // Update auth store — this also triggers useSocket to call updateAuth
+                // Update auth store пїЅ this also triggers useSocket to call updateAuth
                 authStore.setTokens(data.accessToken);
                 // Immediately update socket auth for the next reconnect attempt
                 this.updateAuth(data.accessToken);
@@ -622,3 +622,5 @@ class SocketService {
 }
 
 export const socketService = new SocketService();
+
+

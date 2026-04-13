@@ -1,4 +1,4 @@
-
+﻿
 // ========================================
 // Core Types for Messenger App
 // ========================================
@@ -199,7 +199,7 @@ export interface ChatAppearanceSettings {
 }
 
 export interface CacheSettings {
-    maxSize: number; // в MB
+    maxSize: number; // пїЅ MB
     autoClean: boolean;
     cacheVideos: boolean;
     cacheImages: boolean;
@@ -415,3 +415,5 @@ export interface VoiceAdminAction {
     channelId: string;
     targetChannelId?: string; // for move
 }
+
+

@@ -1,4 +1,4 @@
-
+﻿
 import { useState, useEffect } from 'react';
 import { mediaCache } from '@/lib/cache/mediaCacheManager';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -51,7 +51,7 @@ export function useMediaUrl(url: string | undefined, fileId: string | undefined,
 
                 // 3. Cache in background (only if enabled for this type)
                 if (cachingEnabled) {
-                    // Check quota before caching — evict LRU if needed
+                    // Check quota before caching пїЅ evict LRU if needed
                     const maxBytes = cacheSettings.maxSize * 1024 * 1024;
                     const currentSize = await mediaCache.getCacheSize();
                     if (currentSize + blob.size > maxBytes) {
@@ -84,3 +84,5 @@ export function useMediaUrl(url: string | undefined, fileId: string | undefined,
 
     return { mediaUrl, isLoading, error };
 }
+
+

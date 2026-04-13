@@ -1,4 +1,4 @@
-import { socketService } from '@/lib/socket';
+﻿import { socketService } from '@/lib/socket';
 import { useCallStore } from '@/stores/callStore';
 
 export interface AudioDeviceInfo {
@@ -48,7 +48,7 @@ function mungeOpusSdp(sdp: string | undefined): string | undefined {
         /a=fmtp:(\d+) (.+)/g,
         (match, pt, params) => {
             if (!params.includes('opus')) {
-                // Only modify if this payload type is for Opus — check via rtpmap
+                // Only modify if this payload type is for Opus пїЅ check via rtpmap
                 // We'll apply to all fmtp lines that follow an Opus rtpmap
             }
             const additions = 'maxaveragebitrate=64000;stereo=1;useinbandfec=1;maxplaybackrate=48000';
@@ -220,7 +220,7 @@ class PeerManager {
                 .filter((d) => d.kind === 'audioinput')
                 .map((d) => ({
                     deviceId: d.deviceId,
-                    label: d.label || `Микрофон ${d.deviceId.slice(0, 4)}`,
+                    label: d.label || `Устройство ${d.deviceId.slice(0, 4)}`,
                 }));
         } catch {
             return [];
@@ -318,7 +318,7 @@ class PeerManager {
             return null;
         }
 
-        // Start screen share — cap at 720p/15fps to reduce lag
+        // Start screen share пїЅ cap at 720p/15fps to reduce lag
         const stream = await navigator.mediaDevices.getDisplayMedia({
             video: {
                 width: { ideal: 1280, max: 1920 },
@@ -369,7 +369,7 @@ class PeerManager {
         return this.screenStream;
     }
 
-    /** Tune encoding params for screen share senders — lower bitrate, prefer detail */
+    /** Tune encoding params for screen share senders пїЅ lower bitrate, prefer detail */
     private async tuneScreenSenders(): Promise<void> {
         for (const [, peer] of this.peers) {
             for (const sender of peer.pc.getSenders()) {
@@ -409,7 +409,7 @@ class PeerManager {
         }
 
         if (!this.localStream) {
-            console.error('[PeerManager] No local stream — cannot create peer for', userId);
+            console.error('[PeerManager] No local stream - cannot create peer for', userId);
             return;
         }
 
@@ -761,3 +761,5 @@ class PeerManager {
 }
 
 export const peerManager = new PeerManager();
+
+

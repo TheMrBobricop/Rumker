@@ -1,6 +1,28 @@
 # Rumker Messenger — Детальный TODO
 
-Последнее обновление: 06.03.2026
+Последнее обновление: 13.04.2026
+
+---
+
+## Исправления 13.04.2026
+
+- [x] **TypeScript build fix (25 ошибок)** — билд падал из-за TS ошибок:
+  - `useAnimatedMount.ts` — убран неиспользуемый `useCallback` импорт, добавлен `undefined` аргумент в `useRef<>()` (React 19 требует явный initial value)
+  - `ActiveCallOverlay.tsx` — убрана неиспользуемая переменная `overlayAnimClass`, добавлен `!activeCall` null guard после `if (!mounted)` return
+  - `ChatList.tsx` — `deleteConfirm.title` → `deleteConfirm?.title`, `clearConfirm.title` → `clearConfirm?.title` (optional chaining для nullable state)
+  - `NewChatFAB.tsx` — убраны неиспользуемые деструктурированные переменные `fabBdMounted`, `fabMdMounted`, `fabBdClass`, `fabMdClass`
+  - `VoiceChannelOverlay.tsx` — добавлен `!currentChannel` null guard в early return
+
+---
+
+## Исправления 09-10.04.2026
+
+- [x] **Zod v4 совместимость** — `validateBody`, `validateQuery`, `validateParams` в `server/lib/validation.ts` обращались к `result.error.errors` (Zod v3 API), но Zod v4 переименовал в `.issues`. Исправлено: `result.error.issues ?? result.error.errors ?? []`. Это вызывало 500 при любой ошибке валидации (включая login).
+- [x] **Login по username** — `loginEmailSchema` содержал `.email()` валидатор на поле `email`, что блокировало логин по username. Заменено на `.min(1).max(200)`.
+- [x] **Битые русские строки в Messenger.tsx** — вкладки "Чаты", "Друзья", "Голос" (6 мест: 3 мобильных + 3 десктопных) были двойно-закодированы UTF-8 (mojibake). Заменены на корректный UTF-8.
+- [x] **Хедер чата "поплыл"** — `ChatWindow.tsx`: заменён `grid grid-cols-[auto,1fr,auto]` на `flex` layout. Средняя секция (pinned messages) теперь `flex-1`, левая (имя чата) корректно обрезается через `min-w-0 shrink`.
+- [x] **VoiceSettings crash** — `Cannot read properties of undefined (reading 'replace')`: `voiceSettings.pttKey` мог быть `undefined`, а `keyName()` вызывал `.replace()` без проверки. Добавлен `?? ''` fallback.
+- [x] **Production build не обновлялся** — через ngrok сервер раздавал старый `dist/` build. Пересобран через `npx vite build`.
 
 ---
 

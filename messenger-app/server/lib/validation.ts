@@ -23,8 +23,12 @@ export const registerSchema = z.object({
 });
 
 export const loginEmailSchema = z.object({
-    email: z.string().email(),
+    email: z.string().min(1).max(200).optional(),
+    userId: z.string().min(1).max(100).optional(),
     password: z.string().min(1).max(128),
+}).refine((data) => !!data.email || !!data.userId, {
+    message: 'Email or userId is required',
+    path: ['email'],
 });
 
 export const sendCodeSchema = z.object({
@@ -227,8 +231,9 @@ export function validateBody<T extends z.ZodType>(schema: T) {
     return (req: Request, res: Response, next: NextFunction) => {
         const result = schema.safeParse(req.body);
         if (!result.success) {
-            const errors = result.error.errors.map(e => ({
-                field: e.path.join('.'),
+            const issues = result.error.issues ?? result.error.errors ?? [];
+            const errors = issues.map((e: any) => ({
+                field: (e.path ?? []).join('.'),
                 message: e.message,
             }));
             return res.status(400).json({
@@ -245,8 +250,9 @@ export function validateQuery<T extends z.ZodType>(schema: T) {
     return (req: Request, res: Response, next: NextFunction) => {
         const result = schema.safeParse(req.query);
         if (!result.success) {
-            const errors = result.error.errors.map(e => ({
-                field: e.path.join('.'),
+            const issues = result.error.issues ?? result.error.errors ?? [];
+            const errors = issues.map((e: any) => ({
+                field: (e.path ?? []).join('.'),
                 message: e.message,
             }));
             return res.status(400).json({
@@ -264,10 +270,11 @@ export function validateParams<T extends z.ZodType>(schema: T) {
     return (req: Request, res: Response, next: NextFunction) => {
         const result = schema.safeParse(req.params);
         if (!result.success) {
+            const issues = result.error.issues ?? result.error.errors ?? [];
             return res.status(400).json({
                 error: 'Invalid parameters',
-                details: result.error.errors.map(e => ({
-                    field: e.path.join('.'),
+                details: issues.map((e: any) => ({
+                    field: (e.path ?? []).join('.'),
                     message: e.message,
                 })),
             });

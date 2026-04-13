@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { socketService } from '@/lib/socket';
 import { voiceChannelPeerManager } from '@/lib/webrtc/VoiceChannelPeerManager';
 import { ConnectionQualityIndicator } from './ConnectionQualityIndicator';
+import { useAnimatedMount, ANIM_FADE_SLIDE } from '@/lib/hooks/useAnimatedMount';
 
 /*
  * Discord-exact Voice Connected bar at the bottom of sidebar.
@@ -46,8 +47,11 @@ export function VoiceChannelOverlay() {
     const inputMode = useVoiceChannelStore((s) => s.voiceSettings.inputMode);
     const currentUser = useAuthStore((s) => s.user);
 
+    const shouldShow = isConnected && !!currentChannel;
+    const { mounted, className: animClass } = useAnimatedMount(shouldShow, ANIM_FADE_SLIDE);
+
     // Early return AFTER all hooks
-    if (!isConnected || !currentChannel) return null;
+    if (!mounted || !currentChannel) return null;
 
     const isPTTMode = inputMode === 'pushToTalk';
 
@@ -87,7 +91,7 @@ export function VoiceChannelOverlay() {
 
     return (
         <div
-            className="shrink-0 animate-fade-slide-in select-none"
+            className={`shrink-0 ${animClass} select-none`}
             style={{ background: DC.panelBg }}
         >
             {/* ── Voice Connected (clickable → opens panel) ── */}
